@@ -1,0 +1,11 @@
+{
+  "dependencies": {
+    "2d-bounds": "^1.0.0",
+    "ctx-render-grid-lines": "^1.0.0",
+    "ctx-render-points": "^1.0.0",
+    "ctx-render-polyline": "^1.0.1",
+    "ctx-translate-center": "^1.0.0",
+    "fc": "^1.4.3",
+    "robust-segment-intersect": "^1.0.1"
+  }
+}
