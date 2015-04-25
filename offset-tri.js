@@ -5,17 +5,19 @@ var points = require('ctx-render-points');
 var bounds2 = require('2d-bounds');
 var gridlines = require('ctx-render-grid-lines');
 var isect = require('robust-segment-intersect');
+var createSDF = require('sdf-polygon-2d');
+var area = require('2d-polygon-area');
 
 var TAU = Math.PI*2;
 var min = Math.min;
 var max = Math.max;
 
-var polyline = [
-  [-100, -100],
-  [-100, 100],
-  [100, 0],
-];
-
+// var polyline = [
+//   [-100, -100],
+//   [-100, 100],
+//   [100, 0],
+// ];
+var polyline = [[-100,-100],[-100,100],[-255,-142]];
 
 
 var t1 = [0, 0];
@@ -62,62 +64,29 @@ function gridfill(ctx, r, minx, miny, maxx, maxy) {
   var inside = 'hsla(114, 19%, 25%, 1)';
   var border = 'hsla(228, 19%, 25%, 1)';
   var outside = 'hsla(0, 19%, 25%, .7)';
-  for (var x = lx; x < ux; x+=r) {
-    var wf = false;
-    var wo = true;
-    var counter = 0;
-    var color = outside;
-    var lastline = -1;
-    for (var y = ly; y < uy; y+=r) {
-      var found = false;
+  var a = area(polyline);
+  var sdf = createSDF([polyline])
+  var block = [0, 0];
+  var r2 = (r/2)|0;
 
+  for (var x = lx; x < ux; x+=r) {
+    for (var y = ly; y < uy; y+=r) {
       var oy = min(r - offset2, uy - y);
       var ox = min(r - offset2, ux - x);
+      var dist = sdf(x + r2, y + r2);
 
-      /* TODO: the inner fill method here is a bit crazy
+      // TODO: test all 4 corners and see if an edge
+      //       goes through this box.  If so, split the edge (how?)
+      //       and continue on..
 
-          degenerecies
-          - the points themselves
-          - 2 edges going through the same pixel
-          - 1 edge goes through 2+ points on the y
-          - 2 edges meeting cause more artifacts
-
-      */
-
-      for (var i = 0; i<polyline.length; i++) {
-        var c = polyline[i % polyline.length];
-        var n = polyline[(i+1) % polyline.length];
-
-        if (segbounds(c, n, x, y, x+r, y+r)) {
-          color = border;
-          found = true;
-          wf && counter++;
-          if (lastline !== i) {
-            wo = !wo;
-            lastline = i;
-          }
-          break;
-        }
+      var color;
+      if (Math.abs(dist) <= r) {
+        color = border;
+      } else if (dist < 0) {
+        color = inside;
+      } else {
+        color = outside;
       }
-
-      if (!found && wf) {
-        // wo = !wo
-        if (wo) {
-          color = outside
-        } else {
-          if (counter > 5) {
-            color = outside
-          } else {
-            color = inside;
-          }
-        }
-
-        counter = 0;
-      } else if (!found && !wf) {
-        // wo = true;
-      }
-
-      wf = found;
 
       ctx.fillStyle = color;
       ctx.fillRect(x+offset, y+offset, ox, oy);
