@@ -116,7 +116,7 @@ function gridfill(ctx, r, minx, miny, maxx, maxy) {
 }
 
 
-var r = 40;
+var r = 20;
 var b = [0, 0, 0, 0];
 var ctx = fc(function() {
   ctx.clear();
@@ -124,10 +124,10 @@ var ctx = fc(function() {
 
   bounds2(polyline, b);
   console.log('before', b)
-  b[0] = Math.floor(b[0]/r) * r;
-  b[1] = Math.floor(b[1]/r) * r;
-  b[2] = Math.ceil(b[2]/r) * r;
-  b[3] = Math.ceil(b[3]/r) * r;
+  b[0] = (Math.floor(b[0]/r) * r) - r*2;
+  b[1] = (Math.floor(b[1]/r) * r) - r*2;
+  b[2] = (Math.ceil(b[2]/r) * r) + r*2;
+  b[3] = (Math.ceil(b[3]/r) * r) + r*2;
   console.log('after', b);
   var gridspacing = r;
   ctx.beginPath();
