@@ -7,45 +7,48 @@ var gridlines = require('ctx-render-grid-lines');
 var isect = require('robust-segment-intersect');
 var createSDF = require('sdf-polygon-2d');
 var area = require('2d-polygon-area');
+var segseg = require('segseg');
 
 var TAU = Math.PI*2;
 var min = Math.min;
 var max = Math.max;
 
-// var polyline = [
-//   [-100, -100],
-//   [-100, 100],
-//   [100, 0],
-// ];
-var polyline = [[-100,-100],[-100,100],[-255,-142]];
+var polyline = [
+  [-100, -100],
+  [-100, 100],
+  [0, 0],
+
+  [100, 0],
+];
 
 
-var t1 = [0, 0];
-var t2 = [0, 0];
-var t3 = [0, 0];
-var t4 = [0, 0];
-function segseg(a, b, c, d, e, f, g, h) {
-  t1[0] = a;
-  t1[1] = b;
 
-  t2[0] = c;
-  t2[1] = d;
+// var t1 = [0, 0];
+// var t2 = [0, 0];
+// var t3 = [0, 0];
+// var t4 = [0, 0];
+// function segseg(a, b, c, d, e, f, g, h) {
+//   t1[0] = a;
+//   t1[1] = b;
 
-  t3[0] = e;
-  t3[1] = f;
+//   t2[0] = c;
+//   t2[1] = d;
 
-  t4[0] = g;
-  t4[1] = h;
+//   t3[0] = e;
+//   t3[1] = f;
 
-  return isect(t1, t2, t3, t4);
-}
+//   t4[0] = g;
+//   t4[1] = h;
 
-function segbounds (start, end, minx, miny, maxx, maxy) {
-  return segseg(start[0], start[1], end[0], end[1], minx, miny, minx, maxy) ||
-         segseg(start[0], start[1], end[0], end[1], minx, miny, maxx, miny) ||
-         segseg(start[0], start[1], end[0], end[1], maxx, miny, maxx, maxy) ||
-         segseg(start[0], start[1], end[0], end[1], minx, maxy, maxx, maxy);
-}
+//   return isect(t1, t2, t3, t4);
+// }
+
+// function segbounds (start, end, minx, miny, maxx, maxy) {
+//   return segseg(start[0], start[1], end[0], end[1], minx, miny, minx, maxy) ||
+//          segseg(start[0], start[1], end[0], end[1], minx, miny, maxx, miny) ||
+//          segseg(start[0], start[1], end[0], end[1], maxx, miny, maxx, maxy) ||
+//          segseg(start[0], start[1], end[0], end[1], minx, maxy, maxx, maxy);
+// }
 
 function pointinbox(point, minx, miny, maxx, maxy) {
   var x = point[0];
@@ -78,27 +81,40 @@ function gridfill(ctx, r, minx, miny, maxx, maxy) {
       //       goes through this box.  If so, split the edge (how?)
       //       and continue on..
 
-      // [[x, y], [x+r, y], [x+r, y+r], [x, y+r]].forEach(function(point) {
-      //   if (point[0] > maxx || point[1] > maxy || point[0] < minx || point[1] < miny) {
-      //     return;
-      //   }
+      var res = [0, 0, 0, 0];
+
+      var tests = [[x, y], [x+r, y], [x+r, y+r], [x, y+r]];
+
+      tests.forEach(function(point, i) {
+        if (point[0] > maxx || point[1] > maxy || point[0] < minx || point[1] < miny) {
+          return;
+        }
 
 
-      //   ctx.beginPath();
-      //    ctx.moveTo(point[0], point[1]);
-      //    ctx.arc(point[0], point[1], 1, 0, Math.PI*2, false)
-      //    var d = sdf(point[0], point[1])
+        ctx.beginPath();
+         ctx.moveTo(point[0], point[1]);
+         ctx.arc(point[0], point[1], 1, 0, Math.PI*2, false)
+         var d = sdf(point[0], point[1])
 
-      //    if (d > 0) {
-      //     ctx.fillStyle = "red";
-      //    } else if (d < 0) {
-      //     ctx.fillStyle = "green";
-      //    }
+         if (d > 0) {
+          res[i] = 1;
+          ctx.fillStyle = "hsla(0, 40%, 30%, .9)";
+         } else if (d < 0) {
+          res[i] = -1;
+          ctx.fillStyle = "hsla(114, 40%, 30%, .9)";
+         }
 
-      //    ctx.fill();
-      // })
+         ctx.fill();
+      });
 
+      function line(x1, y1, x2, y2) {
+        ctx.beginPath();
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(x2, y2);
+          ctx.strokeStyle = "grey"
+          ctx.stroke();
 
+      }
 
       var color;
       if (Math.abs(dist) <= r) {
@@ -111,6 +127,30 @@ function gridfill(ctx, r, minx, miny, maxx, maxy) {
 
       ctx.fillStyle = color;
       ctx.fillRect(x+offset, y+offset, ox, oy);
+
+
+      // draw the intersections on the boundary crossings
+      tests.forEach(function(c, i) {
+        var ni = (i+1) % tests.length;
+        var n = tests[ni];
+        if (res[i] !== res[ni]) {
+          line(c[0], c[1], n[0], n[1]);
+
+          // drop a point where the intersection occurred
+          var l = polyline.length;
+          for (var i=0; i<l; i++) {
+            var pc = polyline[i];
+            var pn = polyline[(i+1) % l]
+            var isect = segseg(c[0], c[1], n[0], n[1], pc[0], pc[1], pn[0], pn[1]);
+            if (isect && isect!==true) {
+              ctx.beginPath()
+                ctx.arc(isect[0], isect[1], 2, 0, Math.PI*2, false);
+                ctx.fillStyle = "yellow";
+                ctx.fill();
+            }
+          }
+        }
+      });
     }
   }
 }
@@ -123,12 +163,12 @@ var ctx = fc(function() {
   center(ctx);
 
   bounds2(polyline, b);
-  console.log('before', b)
+
   b[0] = (Math.floor(b[0]/r) * r) - r*2;
   b[1] = (Math.floor(b[1]/r) * r) - r*2;
   b[2] = (Math.ceil(b[2]/r) * r) + r*2;
   b[3] = (Math.ceil(b[3]/r) * r) + r*2;
-  console.log('after', b);
+
   var gridspacing = r;
   ctx.beginPath();
     gridlines(ctx, gridspacing, b[0], b[1], b[2], b[3]);
@@ -136,7 +176,8 @@ var ctx = fc(function() {
     ctx.stroke();
 
   ctx.strokeStyle = "grey";
-  ctx.strokeRect(b[0], b[1], Math.ceil(b[2] - b[0]) + 1, Math.ceil(b[3] - b[1]) + 1) ;
+  var pad = 3;
+  ctx.strokeRect(b[0]-pad, b[1]-pad, Math.ceil(b[2] - b[0]) + pad*2, Math.ceil(b[3] - b[1]) + pad*2) ;
 
   gridfill(ctx, gridspacing, b[0], b[1], b[2], b[3]);
 

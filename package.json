@@ -8,6 +8,7 @@
     "ctx-translate-center": "^1.0.0",
     "fc": "^1.4.3",
     "robust-segment-intersect": "^1.0.1",
-    "sdf-polygon-2d": "^1.1.0"
+    "sdf-polygon-2d": "^1.1.0",
+    "segseg": "^0.2.1"
   }
 }
