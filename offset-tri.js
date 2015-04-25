@@ -79,6 +79,24 @@ function gridfill(ctx, r, minx, miny, maxx, maxy) {
       //       goes through this box.  If so, split the edge (how?)
       //       and continue on..
 
+      [[x, y], [x+r, y], [x+r, y+r], [x, y+r]].forEach(function(point) {
+
+        ctx.beginPath();
+         ctx.moveTo(point[0], point[1]);
+         ctx.arc(point[0], point[1], 1, 0, Math.PI*2, false)
+         var d = sdf(point[0], point[1])
+
+         if (d > 0) {
+          ctx.fillStyle = "red";
+         } else {
+          ctx.fillStyle = "green";
+         }
+
+         ctx.fill();
+      })
+
+
+
       var color;
       if (Math.abs(dist) <= r) {
         color = border;
