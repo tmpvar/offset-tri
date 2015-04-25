@@ -64,7 +64,6 @@ function gridfill(ctx, r, minx, miny, maxx, maxy) {
   var inside = 'hsla(114, 19%, 25%, 1)';
   var border = 'hsla(228, 19%, 25%, 1)';
   var outside = 'hsla(0, 19%, 25%, .7)';
-  var a = area(polyline);
   var sdf = createSDF([polyline])
   var block = [0, 0];
   var r2 = (r/2)|0;
@@ -79,21 +78,25 @@ function gridfill(ctx, r, minx, miny, maxx, maxy) {
       //       goes through this box.  If so, split the edge (how?)
       //       and continue on..
 
-      [[x, y], [x+r, y], [x+r, y+r], [x, y+r]].forEach(function(point) {
+      // [[x, y], [x+r, y], [x+r, y+r], [x, y+r]].forEach(function(point) {
+      //   if (point[0] > maxx || point[1] > maxy || point[0] < minx || point[1] < miny) {
+      //     return;
+      //   }
 
-        ctx.beginPath();
-         ctx.moveTo(point[0], point[1]);
-         ctx.arc(point[0], point[1], 1, 0, Math.PI*2, false)
-         var d = sdf(point[0], point[1])
 
-         if (d > 0) {
-          ctx.fillStyle = "red";
-         } else {
-          ctx.fillStyle = "green";
-         }
+      //   ctx.beginPath();
+      //    ctx.moveTo(point[0], point[1]);
+      //    ctx.arc(point[0], point[1], 1, 0, Math.PI*2, false)
+      //    var d = sdf(point[0], point[1])
 
-         ctx.fill();
-      })
+      //    if (d > 0) {
+      //     ctx.fillStyle = "red";
+      //    } else if (d < 0) {
+      //     ctx.fillStyle = "green";
+      //    }
+
+      //    ctx.fill();
+      // })
 
 
 
@@ -113,18 +116,19 @@ function gridfill(ctx, r, minx, miny, maxx, maxy) {
 }
 
 
-var r = 10;
+var r = 40;
 var b = [0, 0, 0, 0];
 var ctx = fc(function() {
   ctx.clear();
   center(ctx);
 
   bounds2(polyline, b);
-  b[0] -= r;
-  b[1] -= r;
-  b[2] += r;
-  b[3] += r;
-
+  console.log('before', b)
+  b[0] = Math.floor(b[0]/r) * r;
+  b[1] = Math.floor(b[1]/r) * r;
+  b[2] = Math.ceil(b[2]/r) * r;
+  b[3] = Math.ceil(b[3]/r) * r;
+  console.log('after', b);
   var gridspacing = r;
   ctx.beginPath();
     gridlines(ctx, gridspacing, b[0], b[1], b[2], b[3]);
