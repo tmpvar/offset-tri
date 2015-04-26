@@ -14,7 +14,9 @@ var min = Math.min;
 var max = Math.max;
 
 var polyline = [
+  [-10, -100],
   [-100, -100],
+  [-100, -10],
   [-100, 100],
   [0, 0],
 
@@ -22,41 +24,22 @@ var polyline = [
 ];
 
 
-
-// var t1 = [0, 0];
-// var t2 = [0, 0];
-// var t3 = [0, 0];
-// var t4 = [0, 0];
-// function segseg(a, b, c, d, e, f, g, h) {
-//   t1[0] = a;
-//   t1[1] = b;
-
-//   t2[0] = c;
-//   t2[1] = d;
-
-//   t3[0] = e;
-//   t3[1] = f;
-
-//   t4[0] = g;
-//   t4[1] = h;
-
-//   return isect(t1, t2, t3, t4);
-// }
-
-// function segbounds (start, end, minx, miny, maxx, maxy) {
-//   return segseg(start[0], start[1], end[0], end[1], minx, miny, minx, maxy) ||
-//          segseg(start[0], start[1], end[0], end[1], minx, miny, maxx, miny) ||
-//          segseg(start[0], start[1], end[0], end[1], maxx, miny, maxx, maxy) ||
-//          segseg(start[0], start[1], end[0], end[1], minx, maxy, maxx, maxy);
-// }
-
 function pointinbox(point, minx, miny, maxx, maxy) {
   var x = point[0];
   var y = point[1];
   return x >= minx && x <= maxx && y >= miny && y <= maxy;
 }
 
-function gridfill(ctx, r, minx, miny, maxx, maxy) {
+function line(ctx, x1, y1, x2, y2, color) {
+  ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.strokeStyle = color || "grey"
+    ctx.stroke();
+}
+
+
+function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
   var lx = min(minx, maxx);
   var ly = min(miny, maxy);
   var ux = max(minx, maxx);
@@ -70,6 +53,8 @@ function gridfill(ctx, r, minx, miny, maxx, maxy) {
   var sdf = createSDF([polyline])
   var block = [0, 0];
   var r2 = (r/2)|0;
+
+
 
   for (var x = lx; x < ux; x+=r) {
     for (var y = ly; y < uy; y+=r) {
@@ -96,25 +81,21 @@ function gridfill(ctx, r, minx, miny, maxx, maxy) {
          ctx.arc(point[0], point[1], 1, 0, Math.PI*2, false)
          var d = sdf(point[0], point[1])
 
-         if (d > 0) {
+         // The following allows one to compute the offset of
+         // a polygon.
+
+         if (d > r) {
           res[i] = 1;
           ctx.fillStyle = "hsla(0, 40%, 30%, .9)";
-         } else if (d < 0) {
-          res[i] = -1;
+         }
+         else if (d < 0) {
+          //res[i] = -1;
           ctx.fillStyle = "hsla(114, 40%, 30%, .9)";
          }
 
          ctx.fill();
       });
 
-      function line(x1, y1, x2, y2) {
-        ctx.beginPath();
-          ctx.moveTo(x1, y1);
-          ctx.lineTo(x2, y2);
-          ctx.strokeStyle = "grey"
-          ctx.stroke();
-
-      }
 
       var color;
       if (Math.abs(dist) <= r) {
@@ -130,12 +111,30 @@ function gridfill(ctx, r, minx, miny, maxx, maxy) {
 
 
       // draw the intersections on the boundary crossings
+      var found = false;
+      var segment = [];
       tests.forEach(function(c, i) {
         var ni = (i+1) % tests.length;
         var n = tests[ni];
         if (res[i] !== res[ni]) {
-          line(c[0], c[1], n[0], n[1]);
+          line(ctx, c[0], c[1], n[0], n[1]);
 
+          var midpoint = [((c[0] + n[0])/2)|0, ((c[1] + n[1])/2)|0];
+
+          var last = results[results.length-1];
+          // if (last && last[0] === midpoint[0] && last[1] === midpoint[1]) {
+          //   return;
+          // }
+
+          // collect the midpoint
+          segment.push([
+            midpoint[0],
+            midpoint[1],
+            // also track the topology of the cells
+            x, y, i
+          ])
+
+          found = true;
           // drop a point where the intersection occurred
           var l = polyline.length;
           for (var i=0; i<l; i++) {
@@ -151,12 +150,21 @@ function gridfill(ctx, r, minx, miny, maxx, maxy) {
           }
         }
       });
+
+      if (found) {
+        results.push(segment);
+        segment = [];
+      //   draw purple boxes
+      //   ctx.fillStyle = "hsla(270, 40%, 30%, .9)";
+      //   ctx.fillRect(x + r/4, y + r/4, r/2, r/2);
+      }
     }
   }
+
 }
 
 
-var r = 20;
+var r = 40;
 var b = [0, 0, 0, 0];
 var ctx = fc(function() {
   ctx.clear();
@@ -164,10 +172,12 @@ var ctx = fc(function() {
 
   bounds2(polyline, b);
 
-  b[0] = (Math.floor(b[0]/r) * r) - r*2;
-  b[1] = (Math.floor(b[1]/r) * r) - r*2;
-  b[2] = (Math.ceil(b[2]/r) * r) + r*2;
-  b[3] = (Math.ceil(b[3]/r) * r) + r*2;
+  b[0] = ((Math.floor(b[0]/r) * r) - r*2)|0;
+  b[1] = ((Math.floor(b[1]/r) * r) - r*2)|0;
+  b[2] = ((Math.ceil(b[2]/r) * r) + r*2)|0;
+  b[3] = ((Math.ceil(b[3]/r) * r) + r*2)|0;
+
+
 
   var gridspacing = r;
   ctx.beginPath();
@@ -178,8 +188,8 @@ var ctx = fc(function() {
   ctx.strokeStyle = "grey";
   var pad = 3;
   ctx.strokeRect(b[0]-pad, b[1]-pad, Math.ceil(b[2] - b[0]) + pad*2, Math.ceil(b[3] - b[1]) + pad*2) ;
-
-  gridfill(ctx, gridspacing, b[0], b[1], b[2], b[3]);
+  var results = [];
+  gridfill(ctx, gridspacing, b[0], b[1], b[2], b[3], results);
 
   ctx.beginPath();
     poly(ctx, polyline);
@@ -191,8 +201,8 @@ var ctx = fc(function() {
     points(ctx, 3, polyline)
     ctx.fillStyle = "hsl(49, 60%, 56%)";
     ctx.fill();
-  if (mouse.dragging || mouse.near) {
 
+  if (mouse.dragging || mouse.near) {
     ctx.beginPath();
       var p = mouse.dragging === false ? mouse.near : mouse.down;
       var sr = 10;
@@ -201,6 +211,45 @@ var ctx = fc(function() {
       ctx.strokeStyle = 'hsl(49, 60%, 56%)';
       ctx.stroke();
   }
+
+  var chain = results.slice();
+  chain.sort(function(a, b) {
+    return a[0][0] - b[0][0];
+  });
+
+  function next(a, b) {
+    // TODO: there are some degenerate cases here, I think it's just a matter
+    //       of the path not being closed
+
+    // console.log('diffs', Math.abs(a[0][0] - b[0][0]), Math.abs(a[0][1] - b[0][1]), Math.abs(a[1][0] - b[1][0]), Math.abs(a[1][1] - b[1][1]))
+
+    return Math.abs(a[0][0] - b[0][0]) < r ||
+           Math.abs(a[0][1] - b[0][1]) < r ||
+           Math.abs(a[1][0] - b[1][0]) < r ||
+           Math.abs(a[1][1] - b[1][1]) < r
+  }
+
+  var last = chain.shift();
+  var out = [last];
+  var sentinal = results.length*2;
+  while(chain.length && sentinal--) {
+    var l = chain.length;
+    var found = false;
+    for (var i=0; i<l; i++) {
+      if (next(last, chain[i])) {
+        last = chain.splice(i, 1)[0];
+        out.push(last);
+        break;
+      }
+    }
+  }
+
+  var p = (360/out.length)
+  var h = 0;
+  out.map(function(link) {
+    line(ctx, link[0][0], link[0][1], link[1][0], link[1][1], 'hsla(' + (h+=p) + ', 80%, 50%, .9)');
+  });
+
 });
 
 var mouse = {
