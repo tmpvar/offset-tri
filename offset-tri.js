@@ -8,6 +8,7 @@ var isect = require('robust-segment-intersect');
 var createSDF = require('sdf-polygon-2d');
 var area = require('2d-polygon-area');
 var segseg = require('segseg');
+var sign = require('signum');
 
 var TAU = Math.PI*2;
 var min = Math.min;
@@ -38,6 +39,18 @@ function line(ctx, x1, y1, x2, y2, color) {
     ctx.stroke();
 }
 
+function midpoint(c, n) {
+  return [(c[0] + n[0])/2, (c[1] + n[1])/2];
+}
+
+function closest(p, c, target) {
+
+  var pd = Math.abs(p-target);
+  var cd = Math.abs(c-target);
+
+  return pd < cd ? 1 : 0;
+}
+
 
 function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
   var lx = min(minx, maxx);
@@ -66,34 +79,46 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
       //       goes through this box.  If so, split the edge (how?)
       //       and continue on..
 
-      var res = [0, 0, 0, 0];
+      var res = [false, false, false, false];
+
+      /*
+        test the corners of the box
+
+        0-------1
+        |       |
+        |       |
+        |       |
+        3-------2
+      */
+
 
       var tests = [[x, y], [x+r, y], [x+r, y+r], [x, y+r]];
-
+      var crossings = [];
       tests.forEach(function(point, i) {
+
+        // Ensure we're still in the bounds
         if (point[0] > maxx || point[1] > maxy || point[0] < minx || point[1] < miny) {
           return;
         }
 
 
         ctx.beginPath();
-         ctx.moveTo(point[0], point[1]);
-         ctx.arc(point[0], point[1], 1, 0, Math.PI*2, false)
-         var d = sdf(point[0], point[1])
+          ctx.moveTo(point[0], point[1]);
+          ctx.arc(point[0], point[1], 1, 0, Math.PI*2, false)
+          var d = sdf(point[0], point[1])
 
-         // The following allows one to compute the offset of
-         // a polygon.
+          // The following allows one to compute the offset of
+          // a polygon.
 
-         if (d > r) {
-          res[i] = 1;
-          ctx.fillStyle = "hsla(0, 40%, 30%, .9)";
-         }
-         else if (d < 0) {
-          //res[i] = -1;
-          ctx.fillStyle = "hsla(114, 40%, 30%, .9)";
-         }
+          res[i] = d;
+          crossings.push(i);
 
-         ctx.fill();
+          if (d > r) {
+            ctx.fillStyle = "hsla(0, 40%, 30%, .9)";
+          } else if (Math.abs(dist) <= r) {
+            ctx.fillStyle = "hsla(114, 40%, 30%, .9)";
+          }
+          ctx.fill();
       });
 
 
@@ -108,45 +133,60 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
 
       ctx.fillStyle = color;
       ctx.fillRect(x+offset, y+offset, ox, oy);
-
-
       // draw the intersections on the boundary crossings
       var found = false;
       var segment = [];
-      tests.forEach(function(c, i) {
-        var ni = (i+1) % tests.length;
-        var n = tests[ni];
-        if (res[i] !== res[ni]) {
-          line(ctx, c[0], c[1], n[0], n[1]);
+      crossings.forEach(function(ci) {
+        var ni = (ci + 1) % res.length;
+        var c = res[ci];
+        var n = res[ni];
 
-          var midpoint = [((c[0] + n[0])/2)|0, ((c[1] + n[1])/2)|0];
+        if (sign(n - r) === sign(c - r)) {
+          return;
+        }
 
-          var last = results[results.length-1];
-          // if (last && last[0] === midpoint[0] && last[1] === midpoint[1]) {
-          //   return;
-          // }
 
-          // collect the midpoint
-          segment.push([
-            midpoint[0],
-            midpoint[1],
-            // also track the topology of the cells
-            x, y, i
-          ])
+        var edge = [
+          [tests[ni][0], tests[ni][1], n],
+          [tests[ci][0], tests[ci][1], c]
+        ];
 
-          found = true;
-          // drop a point where the intersection occurred
-          var l = polyline.length;
-          for (var i=0; i<l; i++) {
-            var pc = polyline[i];
-            var pn = polyline[(i+1) % l]
-            var isect = segseg(c[0], c[1], n[0], n[1], pc[0], pc[1], pn[0], pn[1]);
-            if (isect && isect!==true) {
-              ctx.beginPath()
-                ctx.arc(isect[0], isect[1], 2, 0, Math.PI*2, false);
-                ctx.fillStyle = "yellow";
-                ctx.fill();
-            }
+        !edge && console.log('not found')
+        var distances = [];
+        var ssss = 100, d = c, updateIndex;
+        while(ssss--) {
+          // bisect the current edge
+          var mid = midpoint(edge[0], edge[1]);
+          var midpointDistance = sdf(mid[0], mid[1]);
+
+          if (Math.abs(midpointDistance - r) < .000001) {
+            found = true;
+            segment.push([
+              mid[0],
+              mid[1],
+              // also track the topology of the cells
+              x, y, ci
+            ]);
+            break;
+          }
+
+          // console.log(midpointDistance, Math.abs(midpointDistance - r))
+          updateIndex = closest(edge[0][2], edge[1][2], r);
+          edge[updateIndex][0] = mid[0];
+          edge[updateIndex][1] = mid[1];
+          edge[updateIndex][2] = midpointDistance;
+        }
+        if (ssss <= 0) {
+
+          // TODO: this is a guess that is wrong half of the time
+          if (segment.length < 2) {
+            console.log(distances.join('\n'))
+            ctx.fillStyle = "hsla(0, 70%, 50%, .5)";
+            ctx.fillRect(x + r/4, y + r/4, r/2, r/2);
+            segment.push(edge[updateIndex]);
+          } else {
+            ctx.fillStyle = "#f0f";
+            ctx.fillRect(x + r/4, y + r/4, r/2, r/2);
           }
         }
       });
@@ -154,9 +194,6 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
       if (found) {
         results.push(segment);
         segment = [];
-      //   draw purple boxes
-      //   ctx.fillStyle = "hsla(270, 40%, 30%, .9)";
-      //   ctx.fillRect(x + r/4, y + r/4, r/2, r/2);
       }
     }
   }
@@ -164,7 +201,7 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
 }
 
 
-var r = 40;
+var r = 60;
 var b = [0, 0, 0, 0];
 var ctx = fc(function() {
   ctx.clear();
@@ -211,8 +248,46 @@ var ctx = fc(function() {
       ctx.strokeStyle = 'hsl(49, 60%, 56%)';
       ctx.stroke();
   }
+  results.forEach(function(seg) {
+    if(seg.length < 2) {
+      ctx.fillStyle = "red";
+      ctx.fillRect(seg[0][2] + r/4, seg[0][3] + r/4, r/2, r/2);
 
+
+      return;
+    }
+    ctx.strokeStyle = "green"
+    line(ctx, seg[0][0], seg[0][1], seg[1][0], seg[1][1], 'red');
+
+    // ctx.beginPath();
+    //   ctx.moveTo(seg[0][0] + r, seg[0][1]);
+    //   ctx.arc(seg[0][0], seg[0][1], r, 0, Math.PI*2, false)
+    //   ctx.strokeStyle = '#red';
+    //   ctx.stroke();
+
+    // ctx.beginPath();
+    //   ctx.moveTo(seg[1][0] + r, seg[1][1]);
+    //   ctx.arc(seg[1][0], seg[1][1], r, 0, Math.PI*2, false)
+    //   ctx.strokeStyle = 'green';
+    //   ctx.stroke();
+
+    // var mid = midpoint(seg[0], seg[1]);
+    // ctx.beginPath();
+    //   ctx.moveTo(mid[0] + r, mid[1]);
+    //   ctx.arc(mid[0], mid[1], r, 0, Math.PI*2, false)
+    //   ctx.strokeStyle = 'orange';
+    //   ctx.stroke();
+
+
+  });
+
+  // poly(ctx,);
+  // ctx.lineWidth = 10;
+  // ctx.strokeStyle = "red";
+  // ctx.stroke();
+return;
   var chain = results.slice();
+  console.log('chain', JSON.stringify(chain, null, '  '))
   chain.sort(function(a, b) {
     return a[0][0] - b[0][0];
   });
