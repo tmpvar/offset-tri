@@ -25,6 +25,10 @@ var polyline = [
 ];
 
 
+window.dump = function() {
+  console.log(JSON.stringify(polyline, null, '  '))
+}
+
 function pointinbox(point, minx, miny, maxx, maxy) {
   var x = point[0];
   var y = point[1];
@@ -154,12 +158,12 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
         !edge && console.log('not found')
         var distances = [];
         var ssss = 100, d = c, updateIndex;
+        var lastDistance = Infinity;
         while(ssss--) {
           // bisect the current edge
           var mid = midpoint(edge[0], edge[1]);
           var midpointDistance = sdf(mid[0], mid[1]);
-
-          if (Math.abs(midpointDistance - r) < .000001) {
+          if (Math.abs(midpointDistance - r) < .000001 || midpointDistance > lastDistance) {
             found = true;
             segment.push([
               mid[0],
@@ -180,7 +184,6 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
 
           // TODO: this is a guess that is wrong half of the time
           if (segment.length < 2) {
-            console.log(distances.join('\n'))
             ctx.fillStyle = "hsla(0, 70%, 50%, .5)";
             ctx.fillRect(x + r/4, y + r/4, r/2, r/2);
             segment.push(edge[updateIndex]);
