@@ -55,14 +55,14 @@ function closest(p, c, target) {
   return pd < cd ? 1 : 0;
 }
 
+var EPS = .000001;
+function near(a, b) {
+  return Math.abs(a-b) < EPS;
+}
 
-
-// a crossing is a isosurface zero crossing on a gridline
-// it is stored in this array as 'x,y' : [start, end]
-var crossingMap = {}
-
-
-
+function vecNear(a, b) {
+  return near(a[0], b[0]) && near(a[1], b[1]);
+}
 
 
 function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
@@ -81,6 +81,8 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
   var r2 = (r/2)|0;
 
   var contour = [];
+  // a map of x,y => [index]
+  var map = {}
 
   for (var x = lx; x < ux; x+=r) {
     for (var y = ly; y < uy; y+=r) {
@@ -110,7 +112,7 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
         [0, 1],
         [1, 2],
         [2, 3],
-        [3, 0]
+        [3, 0],
       ];
 
       var distances = tests.map(function(a) {
@@ -126,47 +128,37 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
         }
       })
 
-      // console.log(crossings);
-
-
       crossings.map(function(c, i) {
         if (c) {
-          var edge = [
-
-            [
-              tests[potentialCrossings[i][0]][0],
-              tests[potentialCrossings[i][0]][1],
-              distances[potentialCrossings[i][0]]
-            ],
-            [
-              tests[potentialCrossings[i][1]][0],
-              tests[potentialCrossings[i][1]][1],
-              distances[potentialCrossings[i][1]]
-            ],
-            // tests[potentialCrossings[i][1]].concat()
-          ];
-
-          // line(ctx, edge[0][0], edge[0][1], edge[1][0], edge[1][1]);
-          // ctx.strokeStyle = "rgba(255, 255, 255, .01)";
-          // ctx.stroke();
+          var edge = [[
+            tests[potentialCrossings[i][0]][0],
+            tests[potentialCrossings[i][0]][1],
+            distances[potentialCrossings[i][0]]
+          ],
+          [
+            tests[potentialCrossings[i][1]][0],
+            tests[potentialCrossings[i][1]][1],
+            distances[potentialCrossings[i][1]]
+          ]];
 
 
-          // follow the rabbit and bisect the weird interval we've setup
+          // bisect the quad edge to find the closest point to zero-crossing
           var ssss = 100, d = c, updateIndex;
           var lastDistance = Infinity;
           var mid;
+          var midpointDistance;
           while(ssss--) {
-            // bisect the current edge
+            // bisect the quad current edge
             mid = midpoint(edge[0], edge[1]);
-            var midpointDistance = sdf(mid[0], mid[1]);
-            if (Math.abs(midpointDistance - r) < .000001 || midpointDistance > lastDistance) {
+            midpointDistance = sdf(mid[0], mid[1]);
+            if (Math.abs(midpointDistance - r) < .1 || midpointDistance > lastDistance) {
               found = true;
               ctx.beginPath()
               ctx.arc(mid[0], mid[1], 5, 0, Math.PI*2, false);
-              ctx.fillStyle = "green";
-              ctx.fill();
+              ctx.strokeStyle = "green";
+              ctx.stroke();
 
-              contour.push(mid);
+              contour.push([mid, x, y, midpointDistance]);
               break;
             }
 
@@ -175,26 +167,73 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
             edge[updateIndex][1] = mid[1];
             edge[updateIndex][2] = midpointDistance;
           }
+
           if (ssss <= 0) {
-              ctx.beginPath()
-              ctx.arc(mid[0], mid[1], 5, 0, Math.PI*2, false);
-              ctx.fillStyle = "green";
-              ctx.fill();
+            contour.push([mid, x, y, midpointDistance]);
+            ctx.beginPath()
+            ctx.arc(mid[0], mid[1], 5, 0, Math.PI*2, false);
+            ctx.fillStyle = "orange";
+            ctx.fill();
           }
         }
       })
     }
   }
 
+  var gridpoints = {};
+
+  var points = {};
+  contour.forEach(function(point) {
+    var gridkey = point[1] + ',' + point[2];
+    if (!gridpoints[gridkey]) {
+      gridpoints[gridkey] = [];
+    }
+    var local = gridpoints[gridkey];
+    var found = false;
+    for (var i = 0; i<local.length; i++) {
+      var lp = local[i][0];
+      if (vecNear(lp, point[0])) {
+        return;
+      }
+    }
+
+    gridpoints[gridkey].push(point);
+
+    var p = point[0]
+    var key = p[0] + ',' + p[1];
+    if (!points[key]) {
+      points[key] = 1;
+    }
+  });
+
+  console.log(contour.length, Object.keys(points).length)
+
+  Object.keys(gridpoints).map(function(key) {
+    var pair = gridpoints[key];
+    if (pair.length < 2) {
+      return;
+    }
+
+    ctx.beginPath()
+    ctx.moveTo(pair[0][0][0], pair[0][0][1]);
+    pair.forEach(function(p, i) {
+      ctx.lineTo(p[0][0], p[0][1]);
+    });
+
+    ctx.strokeStyle = 'red';
+    ctx.stroke();
+  })
+
+
   // TODO: join end to end these contours
 
-  poly(ctx, contour);
-  ctx.strokeStyle="green"
-  ctx.stroke();
+  // poly(ctx, contour);
+  // ctx.strokeStyle="green"
+  // ctx.stroke();
 }
 
 
-var r = 60;
+var r = 20;
 var b = [0, 0, 0, 0];
 var ctx = fc(function() {
   ctx.clear();
@@ -206,8 +245,6 @@ var ctx = fc(function() {
   b[1] = ((Math.floor(b[1]/r) * r) - r*2)|0;
   b[2] = ((Math.ceil(b[2]/r) * r) + r*2)|0;
   b[3] = ((Math.ceil(b[3]/r) * r) + r*2)|0;
-
-
 
   var gridspacing = r;
   ctx.beginPath();
@@ -252,72 +289,7 @@ var ctx = fc(function() {
     ctx.strokeStyle = "green"
     line(ctx, seg[0][0], seg[0][1], seg[1][0], seg[1][1], 'red');
 
-    // ctx.beginPath();
-    //   ctx.moveTo(seg[0][0] + r, seg[0][1]);
-    //   ctx.arc(seg[0][0], seg[0][1], r, 0, Math.PI*2, false)
-    //   ctx.strokeStyle = '#red';
-    //   ctx.stroke();
-
-    // ctx.beginPath();
-    //   ctx.moveTo(seg[1][0] + r, seg[1][1]);
-    //   ctx.arc(seg[1][0], seg[1][1], r, 0, Math.PI*2, false)
-    //   ctx.strokeStyle = 'green';
-    //   ctx.stroke();
-
-    // var mid = midpoint(seg[0], seg[1]);
-    // ctx.beginPath();
-    //   ctx.moveTo(mid[0] + r, mid[1]);
-    //   ctx.arc(mid[0], mid[1], r, 0, Math.PI*2, false)
-    //   ctx.strokeStyle = 'orange';
-    //   ctx.stroke();
-
-
   });
-
-  // poly(ctx,);
-  // ctx.lineWidth = 10;
-  // ctx.strokeStyle = "red";
-  // ctx.stroke();
-return;
-  var chain = results.slice();
-  console.log('chain', JSON.stringify(chain, null, '  '))
-  chain.sort(function(a, b) {
-    return a[0][0] - b[0][0];
-  });
-
-  function next(a, b) {
-    // TODO: there are some degenerate cases here, I think it's just a matter
-    //       of the path not being closed
-
-    // console.log('diffs', Math.abs(a[0][0] - b[0][0]), Math.abs(a[0][1] - b[0][1]), Math.abs(a[1][0] - b[1][0]), Math.abs(a[1][1] - b[1][1]))
-
-    return Math.abs(a[0][0] - b[0][0]) < r ||
-           Math.abs(a[0][1] - b[0][1]) < r ||
-           Math.abs(a[1][0] - b[1][0]) < r ||
-           Math.abs(a[1][1] - b[1][1]) < r
-  }
-
-  var last = chain.shift();
-  var out = [last];
-  var sentinal = results.length*2;
-  while(chain.length && sentinal--) {
-    var l = chain.length;
-    var found = false;
-    for (var i=0; i<l; i++) {
-      if (next(last, chain[i])) {
-        last = chain.splice(i, 1)[0];
-        out.push(last);
-        break;
-      }
-    }
-  }
-
-  var p = (360/out.length)
-  var h = 0;
-  out.map(function(link) {
-    line(ctx, link[0][0], link[0][1], link[1][0], link[1][1], 'hsla(' + (h+=p) + ', 80%, 50%, .9)');
-  });
-
 });
 
 var mouse = {
