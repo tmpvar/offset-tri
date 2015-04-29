@@ -13,7 +13,7 @@ var sign = require('signum');
 var TAU = Math.PI*2;
 var min = Math.min;
 var max = Math.max;
-
+var abs = Math.abs;
 var polyline = [
   [-10, -100],
   [-100, -100],
@@ -56,6 +56,15 @@ function closest(p, c, target) {
 }
 
 
+
+// a crossing is a isosurface zero crossing on a gridline
+// it is stored in this array as 'x,y' : [start, end]
+var crossingMap = {}
+
+
+
+
+
 function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
   var lx = min(minx, maxx);
   var ly = min(miny, maxy);
@@ -71,7 +80,7 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
   var block = [0, 0];
   var r2 = (r/2)|0;
 
-
+  var contour = [];
 
   for (var x = lx; x < ux; x+=r) {
     for (var y = ly; y < uy; y+=r) {
@@ -97,110 +106,91 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
 
 
       var tests = [[x, y], [x+r, y], [x+r, y+r], [x, y+r]];
-      var crossings = [];
-      tests.forEach(function(point, i) {
+      var potentialCrossings = [
+        [0, 1],
+        [1, 2],
+        [2, 3],
+        [3, 0]
+      ];
 
-        // Ensure we're still in the bounds
-        if (point[0] > maxx || point[1] > maxy || point[0] < minx || point[1] < miny) {
-          return;
-        }
-
-
-        ctx.beginPath();
-          ctx.moveTo(point[0], point[1]);
-          ctx.arc(point[0], point[1], 1, 0, Math.PI*2, false)
-          var d = sdf(point[0], point[1])
-
-          // The following allows one to compute the offset of
-          // a polygon.
-
-          res[i] = d;
-          crossings.push(i);
-
-          if (d > r) {
-            ctx.fillStyle = "hsla(0, 40%, 30%, .9)";
-          } else if (Math.abs(dist) <= r) {
-            ctx.fillStyle = "hsla(114, 40%, 30%, .9)";
-          }
-          ctx.fill();
+      var distances = tests.map(function(a) {
+        return sdf(a[0], a[1]);
       });
 
 
-      var color;
-      if (Math.abs(dist) <= r) {
-        color = border;
-      } else if (dist < 0) {
-        color = inside;
-      } else {
-        color = outside;
-      }
-
-      ctx.fillStyle = color;
-      ctx.fillRect(x+offset, y+offset, ox, oy);
-      // draw the intersections on the boundary crossings
-      var found = false;
-      var segment = [];
-      crossings.forEach(function(ci) {
-        var ni = (ci + 1) % res.length;
-        var c = res[ci];
-        var n = res[ni];
-
-        if (sign(n - r) === sign(c - r)) {
-          return;
+      var crossings = potentialCrossings.map(function(t) {
+        if (sign(distances[t[0]] - r) !== sign(distances[t[1]] - r)) {
+          return true;
+        } else {
+          return false;
         }
+      })
+
+      // console.log(crossings);
 
 
-        var edge = [
-          [tests[ni][0], tests[ni][1], n],
-          [tests[ci][0], tests[ci][1], c]
-        ];
+      crossings.map(function(c, i) {
+        if (c) {
+          var edge = [
 
-        !edge && console.log('not found')
-        var distances = [];
-        var ssss = 100, d = c, updateIndex;
-        var lastDistance = Infinity;
-        while(ssss--) {
-          // bisect the current edge
-          var mid = midpoint(edge[0], edge[1]);
-          var midpointDistance = sdf(mid[0], mid[1]);
-          if (Math.abs(midpointDistance - r) < .000001 || midpointDistance > lastDistance) {
-            found = true;
-            segment.push([
-              mid[0],
-              mid[1],
-              // also track the topology of the cells
-              x, y, ci
-            ]);
-            break;
+            [
+              tests[potentialCrossings[i][0]][0],
+              tests[potentialCrossings[i][0]][1],
+              distances[potentialCrossings[i][0]]
+            ],
+            [
+              tests[potentialCrossings[i][1]][0],
+              tests[potentialCrossings[i][1]][1],
+              distances[potentialCrossings[i][1]]
+            ],
+            // tests[potentialCrossings[i][1]].concat()
+          ];
+
+          // line(ctx, edge[0][0], edge[0][1], edge[1][0], edge[1][1]);
+          // ctx.strokeStyle = "rgba(255, 255, 255, .01)";
+          // ctx.stroke();
+
+
+          // follow the rabbit and bisect the weird interval we've setup
+          var ssss = 100, d = c, updateIndex;
+          var lastDistance = Infinity;
+          var mid;
+          while(ssss--) {
+            // bisect the current edge
+            mid = midpoint(edge[0], edge[1]);
+            var midpointDistance = sdf(mid[0], mid[1]);
+            if (Math.abs(midpointDistance - r) < .000001 || midpointDistance > lastDistance) {
+              found = true;
+              ctx.beginPath()
+              ctx.arc(mid[0], mid[1], 5, 0, Math.PI*2, false);
+              ctx.fillStyle = "green";
+              ctx.fill();
+
+              contour.push(mid);
+              break;
+            }
+
+            updateIndex = closest(edge[0][2], edge[1][2], r);
+            edge[updateIndex][0] = mid[0];
+            edge[updateIndex][1] = mid[1];
+            edge[updateIndex][2] = midpointDistance;
           }
-
-          // console.log(midpointDistance, Math.abs(midpointDistance - r))
-          updateIndex = closest(edge[0][2], edge[1][2], r);
-          edge[updateIndex][0] = mid[0];
-          edge[updateIndex][1] = mid[1];
-          edge[updateIndex][2] = midpointDistance;
-        }
-        if (ssss <= 0) {
-
-          // TODO: this is a guess that is wrong half of the time
-          if (segment.length < 2) {
-            ctx.fillStyle = "hsla(0, 70%, 50%, .5)";
-            ctx.fillRect(x + r/4, y + r/4, r/2, r/2);
-            segment.push(edge[updateIndex]);
-          } else {
-            ctx.fillStyle = "#f0f";
-            ctx.fillRect(x + r/4, y + r/4, r/2, r/2);
+          if (ssss <= 0) {
+              ctx.beginPath()
+              ctx.arc(mid[0], mid[1], 5, 0, Math.PI*2, false);
+              ctx.fillStyle = "green";
+              ctx.fill();
           }
         }
-      });
-
-      if (found) {
-        results.push(segment);
-        segment = [];
-      }
+      })
     }
   }
 
+  // TODO: join end to end these contours
+
+  poly(ctx, contour);
+  ctx.strokeStyle="green"
+  ctx.stroke();
 }
 
 
