@@ -60,7 +60,35 @@ function line(ctx, x1, y1, x2, y2, color) {
 }
 
 function midpoint(c, n) {
-  return [(c[0] + n[0])/2, (c[1] + n[1])/2];
+  var d0 = c[2] - r;
+  var d1 = n[2] - r;
+  if (Math.abs(d0) < EPS) {
+    return c;
+  }
+
+  if (Math.abs(d1) < EPS) {
+    return n;
+  }
+
+  var index = -1;
+  var other = -1;
+  if (c[0] === n[0]) {
+    // operate on [1]
+    index = 1;
+  } else if (c[1] === n[1]) {
+    // operate on [0]
+    index = 0;
+  } else {
+    throw new Error('invalid');
+  }
+
+  var diff = c[index] - n[index];
+  var ratio = d0/(d0-d1);
+  var other = (index+1)%2
+  var ret = [0, 0];
+  ret[other] = c[other];
+  ret[index] = c[index] - diff * ratio;
+  return ret;
 }
 
 function closest(p, c, target) {
