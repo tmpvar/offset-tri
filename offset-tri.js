@@ -2,6 +2,7 @@ var fc = require('fc');
 var center = require('ctx-translate-center');
 var poly = require('ctx-render-polyline');
 var points = require('ctx-render-points');
+var circle = require('ctx-circle');
 var bounds2 = require('2d-bounds');
 var gridlines = require('ctx-render-grid-lines');
 var isect = require('robust-segment-intersect');
@@ -78,6 +79,11 @@ function midpoint(c, n) {
   var ratio = d0/(d0-d1);
   ret[0] = c[0] - ret[0] * ratio;
   ret[1] = c[1] - ret[1] * ratio;
+
+  if (isNaN(ret[0]) || isNaN(ret[1])) {
+    throw new Error('nan')
+  }
+
   return ret;
 }
 
@@ -235,9 +241,9 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
             if (Math.abs(midpointDistance - r) < .00001 || midpointDistance >= lastDistance) {
               found = true;
               ctx.beginPath()
-              ctx.arc(mid[0], mid[1], 1, 0, Math.PI*2, false);
-              ctx.strokeStyle = "green";
-              ctx.stroke();
+                circle(ctx, mid[0], mid[1], 1);
+                ctx.strokeStyle = "green";
+                ctx.stroke();
 
               contour.push([mid, x, y, midpointDistance]);
               break;
@@ -250,13 +256,14 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
           }
 
           if (ssss <= 0) {
-            contour.push([mid, x, y, midpointDistance]);
+            console.log('here', Math.abs(midpointDistance - r));
+            // contour.push([mid, x, y, midpointDistance]);
             // contour.push([[edge[0][0], edge[0][1]], x, y, edge[2]]);
             // contour.push([[edge[1][0], edge[1][1]], x, y, edge[2]]);
-            ctx.beginPath()
-            ctx.arc(mid[0], mid[1], 10, 0, Math.PI*2, false);
-            ctx.fillStyle = "orange";
-            ctx.fill();
+            // ctx.beginPath()
+            //   circle(mid[0], mid[1], 10);
+            //   ctx.fillStyle = "orange";
+            //   ctx.fill();
           }
         }
       })
@@ -314,7 +321,7 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
         } else {
           console.log('nop', midd.toFixed(2));
           ctx.beginPath()
-            ctx.arc(mid[0], mid[1], 5, 0, Math.PI*2, false);
+            circle(ctx, mid[0], mid[1], 5);
             ctx.fillStyle = "red"
             ctx.fill();
         }
@@ -386,11 +393,11 @@ var ctx = fc(function() {
     ctx.fill();
 
   if (mouse.dragging || mouse.near) {
+    var p = mouse.dragging === false ? mouse.near : mouse.down;
+    var sr = 10;
+
     ctx.beginPath();
-      var p = mouse.dragging === false ? mouse.near : mouse.down;
-      var sr = 10;
-      ctx.moveTo(p[0] + sr, p[1])
-      ctx.arc(p[0], p[1], sr, 0, TAU, false);
+      circle(ctx, p[0], p[1], sr);
       ctx.strokeStyle = 'hsl(49, 60%, 56%)';
       ctx.stroke();
   }
@@ -443,7 +450,11 @@ document.addEventListener('mousemove', function(ev) {
       p[1] = mouse.pos[1];
     }
   } else {
+    var lastNear = mouse.near;
     mouse.near = nearPolyline(mouse, polyline);
+    if (mouse.near && mouse.near !== lastNear) {
+      console.log(mouse.near.join(', '))
+    }
   }
   ctx.dirty();
 });
