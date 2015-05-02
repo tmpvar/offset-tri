@@ -313,19 +313,19 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
           continue;
         }
 
-        var mid = midpoint(ip[0], jp[0]);
-        var midd = sdf(mid[0], mid[1]) - r
-        if (midd <= r/4) {
+        // var mid = midpoint(ip[0], jp[0]);
+        // var midd = sdf(mid[0], mid[1]) - r
+        // if (midd <= r/4) {
           line(ctx, jp[0][0], jp[0][1], ip[0][0], ip[0][1]);
           ctx.strokeStyle = "red";
           ctx.stroke();
-        } else {
-          console.log('nop', midd.toFixed(2));
-          ctx.beginPath()
-            ctx.arc(mid[0], mid[1], 5, 0, Math.PI*2, false);
-            ctx.fillStyle = "red"
-            // ctx.fill();
-        }
+        // } else {
+        //   console.log('nop', midd.toFixed(2));
+        //   ctx.beginPath()
+        //     ctx.arc(mid[0], mid[1], 5, 0, Math.PI*2, false);
+        //     ctx.fillStyle = "red"
+        //     // ctx.fill();
+        // }
       }
     }
   });
