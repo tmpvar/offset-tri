@@ -70,24 +70,14 @@ function midpoint(c, n) {
     return n;
   }
 
-  var index = -1;
-  var other = -1;
-  if (c[0] === n[0]) {
-    // operate on [1]
-    index = 1;
-  } else if (c[1] === n[1]) {
-    // operate on [0]
-    index = 0;
-  } else {
-    throw new Error('invalid');
-  }
+  var ret = [
+    c[0] - n[0],
+    c[1] - n[1]
+  ];
 
-  var diff = c[index] - n[index];
   var ratio = d0/(d0-d1);
-  var other = (index+1)%2
-  var ret = [0, 0];
-  ret[other] = c[other];
-  ret[index] = c[index] - diff * ratio;
+  ret[0] = c[0] - ret[0] * ratio;
+  ret[1] = c[1] - ret[1] * ratio;
   return ret;
 }
 
