@@ -15,15 +15,31 @@ var min = Math.min;
 var max = Math.max;
 var abs = Math.abs;
 var polyline = [
-  [-10, -100],
-  [-100, -100],
-  [-100, -10],
-  [-100, 100],
-  [0, 0],
-
-  [100, 0],
+  [
+    -10,
+    -100
+  ],
+  [
+    -100,
+    -100
+  ],
+  [
+    -100,
+    -10
+  ],
+  [
+    -151,
+    7
+  ],
+  [
+    0,
+    0
+  ],
+  [
+    100,
+    0
+  ]
 ];
-
 
 window.dump = function() {
   console.log(JSON.stringify(polyline, null, '  '))
@@ -97,13 +113,52 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
       var res = [false, false, false, false];
 
       /*
-        test the corners of the box
-
+        test the corners of the box for zero crossings
+            0
         0-------1
         |       |
-        |       |
+      3 |   X   | 1
         |       |
         3-------2
+            2
+
+      # 2 crossings
+
+      +           +
+        o-------o
+        |       |
+      a *   X   |
+        |\      |
+        o-*-----o
+      -   b       +
+
+      from `a` get other crossings
+        if only 1 other:
+          construct segment from `a` to `b`
+
+      # 4 crossings
+
+      +       c   -
+        o-----*-o
+        *     | |
+      a |\  + |-|
+        |-\   | |
+        o--*--*-o
+      +   b   d   -
+
+      from `a` get other crossings
+        if length > 1:
+
+          find the midpoint between points that has the same sign
+            sdf(midpoint(a, b))
+            sdf(midpoint(a, c))
+            sdf(midpoint(a, d))
+          construct segment from `a` to `b`
+
+
+      TODO: store a structure containing the zero crossings of each edge
+
+
       */
 
 
@@ -121,9 +176,15 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
 
 
       var crossings = potentialCrossings.map(function(t) {
-        if (sign(distances[t[0]] - r) !== sign(distances[t[1]] - r)) {
+        var d0 = distances[t[0]] - r;
+        var d1 = distances[t[1]] - r;
+
+        if (sign(d0) !== sign(d1)) {
           return true;
         } else {
+          if (!d0 && !d1) {
+            return true;
+          }
           return false;
         }
       })
@@ -151,10 +212,10 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
             // bisect the quad current edge
             mid = midpoint(edge[0], edge[1]);
             midpointDistance = sdf(mid[0], mid[1]);
-            if (Math.abs(midpointDistance - r) < .1 || midpointDistance > lastDistance) {
+            if (Math.abs(midpointDistance - r) < .00001 || midpointDistance >= lastDistance) {
               found = true;
               ctx.beginPath()
-              ctx.arc(mid[0], mid[1], 5, 0, Math.PI*2, false);
+              ctx.arc(mid[0], mid[1], 1, 0, Math.PI*2, false);
               ctx.strokeStyle = "green";
               ctx.stroke();
 
@@ -169,9 +230,11 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
           }
 
           if (ssss <= 0) {
-            contour.push([mid, x, y, midpointDistance]);
+            // contour.push([mid, x, y, midpointDistance]);
+            contour.push([[edge[0][0], edge[0][1]], x, y, edge[2]]);
+            contour.push([[edge[1][0], edge[1][1]], x, y, edge[2]]);
             ctx.beginPath()
-            ctx.arc(mid[0], mid[1], 5, 0, Math.PI*2, false);
+            ctx.arc(mid[0], mid[1], 10, 0, Math.PI*2, false);
             ctx.fillStyle = "orange";
             ctx.fill();
           }
@@ -206,23 +269,56 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
     }
   });
 
-  console.log(contour.length, Object.keys(points).length)
-
   Object.keys(gridpoints).map(function(key) {
-    var pair = gridpoints[key];
-    if (pair.length < 2) {
-      return;
+    var points = gridpoints[key];
+
+    var l = points.length;
+    for (var i = 0; i<l; i++) {
+      var ip = points[i];
+      var id = ip[3] - r;
+
+      for (var j = 0; j<l; j++) {
+        var jp = points[j];
+        var jd = jp[3] - r;
+
+        if (j===i) {
+          continue;
+        }
+
+        var mid = midpoint(ip[0], jp[0]);
+        var midd = sdf(mid[0], mid[1]) - r
+        if (midd <= r/4) {
+          line(ctx, jp[0][0], jp[0][1], ip[0][0], ip[0][1]);
+          ctx.strokeStyle = "red";
+          ctx.stroke();
+        } else {
+          console.log('nop', midd.toFixed(2));
+          ctx.beginPath()
+            ctx.arc(mid[0], mid[1], 5, 0, Math.PI*2, false);
+            ctx.fillStyle = "red"
+            // ctx.fill();
+        }
+      }
     }
+  });
 
-    ctx.beginPath()
-    ctx.moveTo(pair[0][0][0], pair[0][0][1]);
-    pair.forEach(function(p, i) {
-      ctx.lineTo(p[0][0], p[0][1]);
-    });
 
-    ctx.strokeStyle = 'red';
-    ctx.stroke();
-  })
+  // Object.keys(gridpoints).map(function(key) {
+  //   var pair = gridpoints[key];
+  //   if (pair.length < 2) {
+  //     console.log('bail')
+  //     return;
+  //   }
+
+  //   ctx.beginPath()
+  //   ctx.moveTo(pair[0][0][0], pair[0][0][1]);
+  //   pair.forEach(function(p, i) {
+  //     ctx.lineTo(p[0][0], p[0][1]);
+  //   });
+
+  //   ctx.strokeStyle = 'red';
+  //   ctx.stroke();
+  // })
 
 
   // TODO: join end to end these contours
@@ -233,7 +329,7 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
 }
 
 
-var r = 20;
+var r = 30;
 var b = [0, 0, 0, 0];
 var ctx = fc(function() {
   ctx.clear();
