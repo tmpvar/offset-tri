@@ -28,8 +28,8 @@ var polyline = [
     -10
   ],
   [
-    -151,
-    7
+    -148,
+    -23
   ],
   [
     0,
@@ -230,6 +230,8 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
             // bisect the quad current edge
             mid = midpoint(edge[0], edge[1]);
             midpointDistance = sdf(mid[0], mid[1]);
+            mid.push(midpointDistance);
+
             if (Math.abs(midpointDistance - r) < .00001 || midpointDistance >= lastDistance) {
               found = true;
               ctx.beginPath()
@@ -248,9 +250,9 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
           }
 
           if (ssss <= 0) {
-            // contour.push([mid, x, y, midpointDistance]);
-            contour.push([[edge[0][0], edge[0][1]], x, y, edge[2]]);
-            contour.push([[edge[1][0], edge[1][1]], x, y, edge[2]]);
+            contour.push([mid, x, y, midpointDistance]);
+            // contour.push([[edge[0][0], edge[0][1]], x, y, edge[2]]);
+            // contour.push([[edge[1][0], edge[1][1]], x, y, edge[2]]);
             ctx.beginPath()
             ctx.arc(mid[0], mid[1], 10, 0, Math.PI*2, false);
             ctx.fillStyle = "orange";
@@ -303,19 +305,19 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
           continue;
         }
 
-        // var mid = midpoint(ip[0], jp[0]);
-        // var midd = sdf(mid[0], mid[1]) - r
-        // if (midd <= r/4) {
+        var mid = midpoint(ip[0], jp[0]);
+        var midd = sdf(mid[0], mid[1]) - r
+        if (midd <= r/4) {
           line(ctx, jp[0][0], jp[0][1], ip[0][0], ip[0][1]);
           ctx.strokeStyle = "red";
           ctx.stroke();
-        // } else {
-        //   console.log('nop', midd.toFixed(2));
-        //   ctx.beginPath()
-        //     ctx.arc(mid[0], mid[1], 5, 0, Math.PI*2, false);
-        //     ctx.fillStyle = "red"
-        //     // ctx.fill();
-        // }
+        } else {
+          console.log('nop', midd.toFixed(2));
+          ctx.beginPath()
+            ctx.arc(mid[0], mid[1], 5, 0, Math.PI*2, false);
+            ctx.fillStyle = "red"
+            ctx.fill();
+        }
       }
     }
   });
