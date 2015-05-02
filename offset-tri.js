@@ -459,6 +459,11 @@ document.addEventListener('mousemove', function(ev) {
   ctx.dirty();
 });
 
+document.addEventListener('copy', function(e) {
+  e.clipboardData.setData('text/plain', JSON.stringify(polyline));
+  e.preventDefault();
+});
+
 document.addEventListener('mouseup', function(ev) {
   mouse.down = false;
   mouse.dragging = false;
