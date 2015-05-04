@@ -71,20 +71,49 @@ function midpoint(c, n) {
     return n;
   }
 
+
+
   var ret = [
     c[0] - n[0],
     c[1] - n[1]
   ];
 
-  var ratio = d0/(d0-d1);
-  ret[0] = c[0] - ret[0] * ratio;
-  ret[1] = c[1] - ret[1] * ratio;
+  var ratio = Math.min(d0, d1) / (d0 - d1)
+
+  // var ratio = d0/(d0-d1);
+
+  if (!isFinite(ratio)) {
+    ratio = .5
+  }
+
+  if (n[0] === c[0]) {
+    if (d0 < d1) {
+      ret[1] = c[1] - ret[1] * ratio;
+    } else {
+      ret[1] = n[1] - ret[1] * ratio;
+    }
+    ret[0] = c[0];
+  } else if (n[1] === c[1]) {
+    if (d0 < d1) {
+      ret[0] = c[0] - ret[0] * ratio;
+    } else {
+      ret[0] = n[0] - ret[0] * ratio;
+    }
+    ret[1] = c[1];
+  } else {
+    // ret[0] = c[0] - ret[0] * ratio;
+    // ret[1] = c[1] - ret[1] * ratio;
+  }
 
   if (isNaN(ret[0]) || isNaN(ret[1])) {
     throw new Error('nan')
   }
 
   return ret;
+}
+
+function bisect(a, b) {
+  return [(a[0] + b[0])/2, (a[1] + b[1])/2];
 }
 
 function closest(p, c, target) {
