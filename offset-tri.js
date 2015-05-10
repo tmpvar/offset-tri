@@ -60,7 +60,7 @@ function line(ctx, x1, y1, x2, y2, color) {
     ctx.stroke();
 }
 
-function midpoint(c, n) {
+function findCrossing(c, n) {
   var d0 = c[2] - r;
   var d1 = n[2] - r;
   if (Math.abs(d0) < EPS) {
@@ -71,16 +71,12 @@ function midpoint(c, n) {
     return n;
   }
 
-
-
   var ret = [
     c[0] - n[0],
     c[1] - n[1]
   ];
 
   var ratio = Math.min(d0, d1) / (d0 - d1)
-
-  // var ratio = d0/(d0-d1);
 
   if (!isFinite(ratio)) {
     ratio = .5
@@ -89,20 +85,25 @@ function midpoint(c, n) {
   if (n[0] === c[0]) {
     if (d0 < d1) {
       ret[1] = c[1] - ret[1] * ratio;
-    } else {
+    } else if (d0 > d1) {
       ret[1] = n[1] - ret[1] * ratio;
+    } else {
+      console.log('d0 === d1');
     }
+
     ret[0] = c[0];
   } else if (n[1] === c[1]) {
     if (d0 < d1) {
       ret[0] = c[0] - ret[0] * ratio;
-    } else {
+    } else if (d0 > d1) {
       ret[0] = n[0] - ret[0] * ratio;
+    } else {
+      console.log('d0 === d1');
     }
     ret[1] = c[1];
   } else {
-    // ret[0] = c[0] - ret[0] * ratio;
-    // ret[1] = c[1] - ret[1] * ratio;
+    ret[0] = c[0] - ret[0] * ratio;
+    ret[1] = c[1] - ret[1] * ratio;
   }
 
   if (isNaN(ret[0]) || isNaN(ret[1])) {
@@ -203,9 +204,9 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
         if length > 1:
 
           find the midpoint between points that has the same sign
-            sdf(midpoint(a, b))
-            sdf(midpoint(a, c))
-            sdf(midpoint(a, d))
+            sdf(findCrossing(a, b))
+            sdf(findCrossing(a, c))
+            sdf(findCrossing(a, d))
           construct segment from `a` to `b`
 
 
@@ -263,8 +264,9 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
           var midpointDistance;
           while(ssss--) {
             // bisect the quad current edge
-            mid = midpoint(edge[0], edge[1]);
+            mid = findCrossing(edge[0], edge[1]);
             midpointDistance = sdf(mid[0], mid[1]);
+            console.log(midpointDistance)
             mid.push(midpointDistance);
 
             if (Math.abs(midpointDistance - r) < .00001 || midpointDistance >= lastDistance) {
@@ -285,14 +287,14 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
           }
 
           if (ssss <= 0) {
-            console.log('here', Math.abs(midpointDistance - r));
+            console.log('ran out of runway', Math.abs(midpointDistance - r));
             // contour.push([mid, x, y, midpointDistance]);
             // contour.push([[edge[0][0], edge[0][1]], x, y, edge[2]]);
             // contour.push([[edge[1][0], edge[1][1]], x, y, edge[2]]);
-            // ctx.beginPath()
-            //   circle(mid[0], mid[1], 10);
-            //   ctx.fillStyle = "orange";
-            //   ctx.fill();
+            ctx.beginPath()
+              circle(ctx, mid[0], mid[1], 10);
+              ctx.fillStyle = "orange";
+              ctx.fill();
           }
         }
       })
@@ -341,7 +343,7 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
           continue;
         }
 
-        var mid = midpoint(ip[0], jp[0]);
+        var mid = findCrossing(ip[0], jp[0]);
         var midd = sdf(mid[0], mid[1]) - r
         if (midd <= r/4) {
           line(ctx, jp[0][0], jp[0][1], ip[0][0], ip[0][1]);
