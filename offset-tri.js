@@ -24,27 +24,27 @@ var polyline = [
     -100,
     -100
   ],
-  // [
-  //   -100,
-  //   -10
-  // ],
-  // [
-  //   -148,
-  //   -23
-  // ],
-  // [
-  //   0,
-  //   0
-  // ],
-  // [
-  //   100,
-  //   0
-  // ]
+  [
+    -100,
+    -10
+  ],
+  [
+    -148,
+    -23
+  ],
+  [
+    0,
+    0
+  ],
+  [
+    100,
+    0
+  ]
 ];
 
-//var polyline = [[-10,-100],[-100,-100]]//,[-112,162],[-148,-23],[0,0],[91,28]];
-var polyline = [[-10,-100],[-19,-100]]
-var polyline = [[-1,-75],[-19,-100]]
+// var polyline = [[-10,-100],[-100,-100]]//,[-112,162],[-148,-23],[0,0],[91,28]];
+// var polyline = [[-10,-100],[-19,-100]]
+// var polyline = [[-1,-75],[-19,-100]]
 window.dump = function() {
   console.log(JSON.stringify(polyline, null, '  '))
 }
@@ -196,9 +196,7 @@ function findCrossing(c, n) {
     }
     ret[1] = c[1];
   } else {
-    debugger
-    // ret[0] = c[0] - ret[0] * ratio;
-    // ret[1] = c[1] - ret[1] * ratio;
+    throw new Error('ended up off of the grid')
   }
 
   if (isNaN(ret[0]) || isNaN(ret[1])) {
@@ -302,8 +300,6 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
 
 
       TODO: store a structure containing the zero crossings of each edge
-
-
       */
 
 
@@ -329,7 +325,7 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
         if (sign(d0) !== sign(d1)) {
           return true;
         } else {
-          if (!d0 || !d1) {
+          if (!d0 && !d1) {
             return true;
           }
           return false;
@@ -463,9 +459,9 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
               ctx.strokeStyle = "red";
               ctx.stroke();
 
-              ctx.fillStyle = "rgba(255, 255, 54, .1)";
-              ctx.fillRect(x+5, y+5, r-10, r-10);
-              ctx.fill();
+              // ctx.fillStyle = "rgba(255, 255, 54, .1)";
+              // ctx.fillRect(x+5, y+5, r-10, r-10);
+              // ctx.fill();
           } else {
 
 
@@ -573,22 +569,22 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
   });
 
 
-  Object.keys(gridpoints).map(function(key) {
-    var pair = gridpoints[key];
-    if (pair.length < 2) {
-      console.log('bail')
-      return;
-    }
+  // Object.keys(gridpoints).map(function(key) {
+  //   var pair = gridpoints[key];
+  //   if (pair.length < 2) {
+  //     console.log('bail')
+  //     return;
+  //   }
 
-    ctx.beginPath()
-    ctx.moveTo(pair[0][0][0], pair[0][0][1]);
-    pair.forEach(function(p, i) {
-      ctx.lineTo(p[0][0], p[0][1]);
-    });
+  //   ctx.beginPath()
+  //   ctx.moveTo(pair[0][0][0], pair[0][0][1]);
+  //   pair.forEach(function(p, i) {
+  //     ctx.lineTo(p[0][0], p[0][1]);
+  //   });
 
-    ctx.strokeStyle = '#4F8323';
-    ctx.stroke();
-  })
+  //   ctx.strokeStyle = '#4F8323';
+  //   ctx.stroke();
+  // })
 
 
   // TODO: join end to end these contours
@@ -599,9 +595,9 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
 }
 
 
-var r = 30;
+var r = 20;
 var b = [0, 0, 0, 0];
-var ctx = fc(function() {
+var ctx = window.ctx = fc(function() {
 
   // canvas scene setup
   ctx.clear();
@@ -614,6 +610,24 @@ var ctx = fc(function() {
   b[1] = ((Math.floor(b[1]/r) * r) - r*2)|0;
   b[2] = ((Math.ceil(b[2]/r) * r) + r*2)|0;
   b[3] = ((Math.ceil(b[3]/r) * r) + r*2)|0;
+
+  // draw the polygon with the proper radius (minkowski sum)
+  ctx.save()
+    ctx.lineWidth = r*2;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    ctx.beginPath();
+
+      poly(ctx, polyline);
+      ctx.lineTo(polyline[0][0], polyline[0][1])
+      ctx.moveTo(0, 0)
+    ctx.closePath();
+
+    ctx.strokeStyle = "rgba(255, 255, 255, .2)";
+    ctx.stroke();
+  ctx.restore();
+
 
   var gridspacing = r;
   ctx.beginPath();
