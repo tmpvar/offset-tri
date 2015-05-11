@@ -376,7 +376,7 @@ function gridfill(ctx, delta, minx, miny, maxx, maxy, results) {
 
 
           // bisect the quad edge to find the closest point to zero-crossing
-          var ssss = 200, d = c, updateIndex;
+          var ssss = 10, d = c, updateIndex;
           var lastDistance = Infinity;
           var mid = [0, 0];
           var midpointDistance;
@@ -392,7 +392,10 @@ function gridfill(ctx, delta, minx, miny, maxx, maxy, results) {
                 ctx.strokeStyle = "green";
                 ctx.stroke();
 
-              contour.push([mid, x, y, midpointDistance]);
+              var mx = mid[0] - (mid[0]%delta);
+              var my = mid[1] - (mid[1]%delta);
+
+              contour.push([mid, mx, my, midpointDistance - delta]);
               break;
             }
 
@@ -496,7 +499,10 @@ function gridfill(ctx, delta, minx, miny, maxx, maxy, results) {
   var points = {};
   // poor man's cache for running point -> cell queries
   contour.forEach(function(point) {
-    var gridkey = point[1] + ',' + point[2];
+    var mx = point[1];
+    var my = point[2];
+
+    var gridkey = mx + ',' + my;
     if (!gridpoints[gridkey]) {
       gridpoints[gridkey] = [];
     }
@@ -518,84 +524,245 @@ function gridfill(ctx, delta, minx, miny, maxx, maxy, results) {
     }
   });
 
-/*  Object.keys(gridpoints).map(function(key) {
-    var points = gridpoints[key];
+  console.log(gridpoints)
 
-    var l = points.length;
-    for (var i = 0; i<l; i++) {
-      var ip = points[i];
-      var id = ip[3] - r;
+  /*
 
-      for (var j = 0; j<l; j++) {
-        var jp = points[j];
-        var jd = jp[3] - r;
 
-        if (j===i) {
-          continue;
-        }
+    x 0       10      20
+    y
+               _ shared edge
+              /
+    0 o-------o-------o-------o-------o
+      |       |       |       |       |
+      a   A   b   B   c   C   d   D   e
+      |       |       |       |       |
+   10 o-------o-------o-------o-------o
 
-        /*
-           a
-        o--*---o
-        | /    * c
-      b *     /|
-        o----*-o
-             d
+      a exists on the border of A & B
 
-        a-------c
+    randomly select: b
+    query for membership: A, B
 
-        find the midpoint
+    list
 
-        a---o---c
 
-        test distance at o
+    create 2 segments node([?, b]), node([b, ?])
 
-        0   +   0
-        a---o---c   = not connected
+    var unprocessed = [node, node, node]
 
-        0   0   0
-        a---o---c   = connected
+    list.insertBefore(node([?, b]));
+    list.insertAfter(node([b, ?]));
 
-        0   -   0
-        a---o---c   = not connected
+    per segment:
+      query A for points: a, b
+      find point that has not been processed: a
+      if # of availble points in A is < 2
+        use it
+      else
+        compute midpoint: ma, and sdf(a): da
+        if the sign of da is the same as a and b
+          collect a as ?: [a, b]
 
-        * /
 
-        var mid = bisect(ip[0], jp[0]);
-        var midd = sdf(mid[0], mid[1]) - r
-        // return;
-        if (midd <= r/4) {
-          line(ctx, jp[0][0], jp[0][1], ip[0][0], ip[0][1]);
-          ctx.strokeStyle = "red";
-          ctx.stroke();
-        } else {
-          console.log('nop', midd.toFixed(2));
-          ctx.beginPath()
-            circle(ctx, mid[0], mid[1], 5);
-            ctx.fillStyle = "red"
-            ctx.fill();
-        }
+    list = list.next(node(a))
+  */
+
+  function node(crossing) {
+    return {
+      crossing: crossing,
+      next: null,
+      prev: null,
+      append : function(n) {
+        this.next = n;
+        n.prev = this;
       }
+    };
+  }
+
+  function doit(r, linkedListNode) {
+
+    var crossing = linkedListNode.crossing;
+    var crossings = findCellCrossings(r, crossing);
+
+    var found = crossings.filter(function(c) {
+      if (!vecNear(c[0], crossing[0])) {
+        var midpoint = bisect(crossing[0], c[0]);
+        var midpointDistance = sdf(midpoint) - r;
+
+        return sign(midpointDistance) === sign(crossing[3]);
+      }
+      return false;
+    });
+
+    if (found.length > 1) {
+      throw new Error('more than one possibility');
+    } else {
+
+      var newNode = node(found[0]);
+      linkedListNode.append(newNode);
+      return newNode
     }
-  });*/
+  }
+
+
+  var seenCells = {};
+  function findCellCrossings(r, crossing) {
+    var x = crossing[0][0];
+    var y = crossing[0][1];
+    var mx = crossing[1];
+    var my = crossing[2];
+    var cx = x % r;
+    var cy = y % r;
+
+    /*
+      vertical
+
+         r
+       _______
+      |       |
+      0       10      20
+              v
+      A       B
+      o-------o-------o
+      |       |       |
+      a   A  1|3  B   c
+      |       |       |
+      o-------X-------o
+      |       |       |
+      |   C  1|3  D   |
+      |       |       |
+      o-------o-------o
+
+
+      // TODO: don't sample full SDF for these, just use `point-in-big-polygon`
+
+      // multiple crossings
+
+      o----X----------o
+      |   /           |
+      |  /            B
+      | /            /|
+      |/            / |
+      A            /  |
+      |           /   |
+      |          /    |
+      o---------C-----o
+
+      0      +      0
+      X------o------B
+
+      0      +      0
+      X------o------C
+
+      0      0      0
+      X------o------A
+
+    */
+
+    var points = [];
+
+    if (!cx && !cy) {
+      Array.prototype.push.apply(points, gridpoints[mx + ',' + my]);
+      Array.prototype.push.apply(points, gridpoints[(mx - r) + ',' + my]);
+      Array.prototype.push.apply(points, gridpoints[(mx - r) + ',' + (my -r)]);
+      Array.prototype.push.apply(points, gridpoints[mx + ',' + (my - r)]);
+    } else if (!cx) {
+      Array.prototype.push.apply(points, gridpoints[(mx - r) + ',' + my]);
+      Array.prototype.push.apply(points, gridpoints[mx + ',' + my]);
+    } else if (!cy) {
+      Array.prototype.push.apply(points, gridpoints[mx + ',' + my]);
+      Array.prototype.push.apply(points, gridpoints[mx + ',' + (my - r)]);
+    }
+
+    return points;
+  }
+
+  var randomCrossing = gridpoints[Object.keys(gridpoints)[0]][0];
+
+  var list = node(randomCrossing);
+
+  console.log('DOIT', doit(delta, list));
 
 
   // Object.keys(gridpoints).map(function(key) {
-  //   var pair = gridpoints[key];
-  //   if (pair.length < 2) {
-  //     console.log('bail')
-  //     return;
+  //   var points = gridpoints[key];
+
+  //   var l = points.length;
+  //   for (var i = 0; i<l; i++) {
+  //     var ip = points[i];
+  //     var id = ip[3] - r;
+
+  //     for (var j = 0; j<l; j++) {
+  //       var jp = points[j];
+  //       var jd = jp[3] - r;
+
+  //       if (j===i) {
+  //         continue;
+  //       }
+
+
+  //          a
+  //       o--*---o
+  //       | /    * c
+  //     b *     /|
+  //       o----*-o
+  //            d
+
+  //       a-------c
+
+  //       find the midpoint
+
+  //       a---o---c
+
+  //       test distance at o
+
+  //       0   +   0
+  //       a---o---c   = not connected
+
+  //       0   0   0
+  //       a---o---c   = connected
+
+  //       0   -   0
+  //       a---o---c   = not connected
+
+
+
+  //       var mid = bisect(ip[0], jp[0]);
+  //       var midd = sdf(mid[0], mid[1]) - r
+  //       // return;
+  //       if (midd <= r/4) {
+  //         line(ctx, jp[0][0], jp[0][1], ip[0][0], ip[0][1]);
+  //         ctx.strokeStyle = "red";
+  //         ctx.stroke();
+  //       } else {
+  //         console.log('nop', midd.toFixed(2));
+  //         ctx.beginPath()
+  //           circle(ctx, mid[0], mid[1], 5);
+  //           ctx.fillStyle = "red"
+  //           ctx.fill();
+  //       }
+  //     }
   //   }
+  // });
 
-  //   ctx.beginPath()
-  //   ctx.moveTo(pair[0][0][0], pair[0][0][1]);
-  //   pair.forEach(function(p, i) {
-  //     ctx.lineTo(p[0][0], p[0][1]);
-  //   });
 
-  //   ctx.strokeStyle = '#4F8323';
-  //   ctx.stroke();
-  // })
+  Object.keys(gridpoints).map(function(key) {
+    var pair = gridpoints[key];
+    if (pair.length < 2) {
+      console.log('bail')
+      return;
+    }
+
+    ctx.beginPath()
+    ctx.moveTo(pair[0][0][0], pair[0][0][1]);
+    pair.forEach(function(p, i) {
+      ctx.lineTo(p[0][0], p[0][1]);
+    });
+
+    ctx.strokeStyle = '#4F8323';
+    ctx.stroke();
+  })
 
 
   // TODO: join end to end these contours
