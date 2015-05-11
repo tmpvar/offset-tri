@@ -34,19 +34,20 @@ var polyline = [
     -148,
     -23
   ],
-  [
-    0,
-    0
-  ],
-  [
-    100,
-    0
-  ]
+  // [
+  //   0,
+  //   0
+  // ],
+  // [
+  //   100,
+  //   0
+  // ]
 ];
 
 // var polyline = [[-10,-100],[-100,-100]]//,[-112,162],[-148,-23],[0,0],[91,28]];
 // var polyline = [[-10,-100],[-19,-100]]
-var polyline = [[-1,-75],[-19,-100]]
+// var polyline = [[-130,-93],[-19,-100]]
+var polyline = [[-10,-100],[-100,-100],[-45,25],[-146,-5]]
 window.dump = function() {
   console.log(JSON.stringify(polyline, null, '  '))
 }
@@ -65,10 +66,10 @@ function line(ctx, x1, y1, x2, y2, color) {
     ctx.stroke();
 }
 
-function findCrossing(c, n) {
+function findCrossing(c, n, delta) {
 
   /*
-      c     o
+      |     :
       |     :
       |     :
       |     :  a
@@ -83,10 +84,8 @@ function findCrossing(c, n) {
       a - r == +
   */
 
-
-
-  var d0 = c[2] - r;
-  var d1 = n[2] - r;
+  var d0 = c[2] - delta;
+  var d1 = n[2] - delta;
   if (Math.abs(d0) < EPS) {
     return c;
   }
@@ -230,7 +229,7 @@ function vecNear(a, b) {
 }
 
 
-function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
+function gridfill(ctx, delta, minx, miny, maxx, maxy, results) {
   var lx = min(minx, maxx);
   var ly = min(miny, maxy);
   var ux = max(minx, maxx);
@@ -243,14 +242,13 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
   var outside = 'hsla(0, 19%, 25%, .7)';
   var sdf = createSDF([polyline])
   var block = [0, 0];
-  var r2 = (r/2)|0;
 
   var contour = [];
   // a map of x,y => [index]
   var map = {}
   var cache = {}
-  for (var x = lx; x < ux; x+=r) {
-    for (var y = ly; y < uy; y+=r) {
+  for (var x = lx; x < ux; x+=delta) {
+    for (var y = ly; y < uy; y+=delta) {
       // TODO: test all 4 corners and see if an edge
       //       goes through this box.  If so, split the edge (how?)
       //       and continue on..
@@ -305,7 +303,12 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
       */
 
 
-      var tests = [[x, y], [x+r, y], [x+r, y+r], [x, y+r]];
+      var tests = [
+        [x, y],
+        [x+delta, y],
+        [x+delta, y+delta],
+        [x, y+delta]
+      ];
 
       // helps define an edge below
       var potentialCrossings = [
@@ -321,8 +324,8 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
 
 
       var crossings = potentialCrossings.map(function(t) {
-        var d0 = distances[t[0]] - r;
-        var d1 = distances[t[1]] - r;
+        var d0 = distances[t[0]] - delta;
+        var d1 = distances[t[1]] - delta;
 
         if (sign(d0) !== sign(d1)) {
           return true;
@@ -351,27 +354,26 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
       */
       crossings.map(function(c, i) {
         if (c) {
-
           // an edge is (x, y) and the distance to the isosurface @ x,y
-          var edge = [[
+          var edgea = [
             tests[potentialCrossings[i][0]][0],
             tests[potentialCrossings[i][0]][1],
             distances[potentialCrossings[i][0]]
-          ],
-          [
+          ];
+          var edgeb = [
             tests[potentialCrossings[i][1]][0],
             tests[potentialCrossings[i][1]][1],
             distances[potentialCrossings[i][1]]
-          ]];
+          ];
 
-          var oedge = [[
-            tests[potentialCrossings[i][0]][0],
-            tests[potentialCrossings[i][0]][1],
-          ],
-          [
-            tests[potentialCrossings[i][1]][0],
-            tests[potentialCrossings[i][1]][1],
-          ]];
+
+          var edge;
+          if (edgea[2] > 0) {
+            edge = [edgea, edgeb]
+          } else {
+            edge = [edgeb, edgea]
+          }
+
 
           // bisect the quad edge to find the closest point to zero-crossing
           var ssss = 200, d = c, updateIndex;
@@ -380,11 +382,10 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
           var midpointDistance;
           while(ssss--) {
             // bisect the quad current edge
-            mid = findCrossing(edge[0], edge[1]);
+            mid = findCrossing(edge[0], edge[1], delta);
             midpointDistance = sdf(mid[0], mid[1]);
-            mid.push(midpointDistance);
 
-            if (Math.abs(midpointDistance - r) < 1e-6) {
+            if (Math.abs(midpointDistance - delta) < 1e-6) {
               found = true;
               ctx.beginPath()
                 circle(ctx, mid[0], mid[1], 1);
@@ -397,7 +398,7 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
 
             /*
 
-              we a guess with it's distance to the isosurface
+              we make a guess with its distance to the isosurface
 
               +          -
               o------*---o
@@ -417,17 +418,15 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
                 these become the new edge
 
 
-
-
               +      -   -   -   -
               o------o---*---*---*
                   |
                   bisect
             */
 
-            var drm = midpointDistance - r;
-            var dr0 = edge[0][2] - r;
-            var dr1 = edge[1][2] - r;
+            var drm = midpointDistance - delta;
+            var dr0 = edge[0][2] - delta;
+            var dr1 = edge[1][2] - delta;
 
             if (sign(drm) !== sign(dr0)) {
               updateIndex = 1;
@@ -442,30 +441,39 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
             edge[updateIndex][1] = mid[1];
             edge[updateIndex][2] = midpointDistance;
 
-            if (Math.abs(edge[0][2]) < Math.abs(edge[1][2])) {
-              var t = edge[0];
-              edge[0] = edge[1];
-              edge[1] = t;
-            }
-
+            // if (Math.abs(edge[0][2]) < Math.abs(edge[1][2])) {
+            //   var t = edge[0];
+            //   edge[0] = edge[1];
+            //   edge[1] = t;
+            // }
           }
 
           if (ssss <= 0) {
-            console.log('ran out of runway', mid[0], mid[1], midpointDistance - r, edge[0][2] - r, edge[1][2] - r);
+            console.log('ran out of runway',
+              mid[0],
+              mid[1],
+              midpointDistance - delta,
+              edge[0][2] - delta,
+              edge[1][2] - delta,
+              x,
+              y,
+              i
+            );
             // contour.push([mid, x, y, midpointDistance]);
             // contour.push([[edge[0][0], edge[0][1]], x, y, edge[2]]);
             // contour.push([[edge[1][0], edge[1][1]], x, y, edge[2]]);
-            // ctx.beginPath()
-            //   circle(ctx, mid[0], mid[1], 10);
-            ctx.beginPath();
-              ctx.moveTo(oedge[0][0], oedge[0][1]);
-              ctx.lineTo(oedge[1][0], oedge[1][1]);
-              ctx.strokeStyle = "red";
-              ctx.stroke();
+            // ctx.beginPath();
+            //   ctx.moveTo(oedge[0][0], oedge[0][1]);
+            //   ctx.lineTo(oedge[1][0], oedge[1][1]);
+            //   ctx.strokeStyle = "red";
+            //   ctx.stroke();
 
-              // ctx.fillStyle = "rgba(255, 255, 54, .1)";
-              // ctx.fillRect(x+5, y+5, r-10, r-10);
-              // ctx.fill();
+            // ctx.beginPath()
+            //   circle(ctx, mid[0], mid[1], 5);
+            //   ctx.stroke();
+
+            // ctx.fillStyle = "rgba(255, 255, 54, .1)";
+            // ctx.fillRect(x+5, y+5, r-10, r-10);
           } else {
 
 
@@ -503,7 +511,7 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
 
     gridpoints[gridkey].push(point);
 
-    var p = point[0]
+    var p = point[0];
     var key = p[0] + ',' + p[1];
     if (!points[key]) {
       points[key] = 1;
@@ -572,22 +580,22 @@ function gridfill(ctx, r, minx, miny, maxx, maxy, results) {
   });*/
 
 
-  Object.keys(gridpoints).map(function(key) {
-    var pair = gridpoints[key];
-    if (pair.length < 2) {
-      console.log('bail')
-      return;
-    }
+  // Object.keys(gridpoints).map(function(key) {
+  //   var pair = gridpoints[key];
+  //   if (pair.length < 2) {
+  //     console.log('bail')
+  //     return;
+  //   }
 
-    ctx.beginPath()
-    ctx.moveTo(pair[0][0][0], pair[0][0][1]);
-    pair.forEach(function(p, i) {
-      ctx.lineTo(p[0][0], p[0][1]);
-    });
+  //   ctx.beginPath()
+  //   ctx.moveTo(pair[0][0][0], pair[0][0][1]);
+  //   pair.forEach(function(p, i) {
+  //     ctx.lineTo(p[0][0], p[0][1]);
+  //   });
 
-    ctx.strokeStyle = '#4F8323';
-    ctx.stroke();
-  })
+  //   ctx.strokeStyle = '#4F8323';
+  //   ctx.stroke();
+  // })
 
 
   // TODO: join end to end these contours
@@ -614,6 +622,13 @@ var ctx = window.ctx = fc(function() {
   b[2] = ((Math.ceil(b[2]/r) * r) + r*2)|0;
   b[3] = ((Math.ceil(b[3]/r) * r) + r*2)|0;
 
+  var gridspacing = r;
+  ctx.beginPath();
+    gridlines(ctx, gridspacing, b[0], b[1], b[2], b[3]);
+    ctx.strokeStyle = "rgba(222, 228, 244, .1)";
+    ctx.stroke();
+
+
   // draw the polygon with the proper radius (minkowski sum)
   ctx.save()
     ctx.lineWidth = r*2;
@@ -627,16 +642,11 @@ var ctx = window.ctx = fc(function() {
       ctx.moveTo(0, 0)
     ctx.closePath();
 
-    ctx.strokeStyle = "rgba(255, 255, 255, .2)";
+    ctx.strokeStyle = "rgba(0, 0, 0, .5)";
     ctx.stroke();
   ctx.restore();
 
 
-  var gridspacing = r;
-  ctx.beginPath();
-    gridlines(ctx, gridspacing, b[0], b[1], b[2], b[3]);
-    ctx.strokeStyle = "rgba(222, 228, 244, .1)";
-    ctx.stroke();
 
   ctx.strokeStyle = "grey";
   var pad = 3;
