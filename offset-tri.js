@@ -1,3 +1,6 @@
+// TODO: contours have bunk-ish index 1,2
+
+
 /* jshint asi: true */
 
 var fc = require('fc');
@@ -392,10 +395,7 @@ function gridfill(ctx, delta, minx, miny, maxx, maxy, results) {
                 ctx.strokeStyle = "green";
                 ctx.stroke();
 
-              var mx = mid[0] - (mid[0]%delta);
-              var my = mid[1] - (mid[1]%delta);
-
-              contour.push([mid, mx, my, midpointDistance - delta]);
+              contour.push([mid, x, y, midpointDistance - delta]);
               break;
             }
 
@@ -499,8 +499,10 @@ function gridfill(ctx, delta, minx, miny, maxx, maxy, results) {
   var points = {};
   // poor man's cache for running point -> cell queries
   contour.forEach(function(point) {
-    var mx = point[1];
-    var my = point[2];
+    var x = point[0][0];
+    var y = point[0][1];
+    var mx = x - (x%r);
+    var my = y - (y%r);
 
     var gridkey = mx + ',' + my;
     if (!gridpoints[gridkey]) {
@@ -570,7 +572,8 @@ function gridfill(ctx, delta, minx, miny, maxx, maxy, results) {
 
   function node(crossing) {
     return {
-      crossing: crossing,
+      crossing: crossing[0],
+      distance: crossing[3],
       next: null,
       prev: null,
       append : function(n) {
@@ -610,8 +613,8 @@ function gridfill(ctx, delta, minx, miny, maxx, maxy, results) {
   function findCellCrossings(r, crossing) {
     var x = crossing[0][0];
     var y = crossing[0][1];
-    var mx = crossing[1];
-    var my = crossing[2];
+    var mx = x - (x%r);
+    var my = y - (y%r);
     var cx = x % r;
     var cy = y % r;
 
@@ -669,6 +672,7 @@ function gridfill(ctx, delta, minx, miny, maxx, maxy, results) {
       Array.prototype.push.apply(points, gridpoints[mx + ',' + (my - r)]);
     } else if (!cx) {
       Array.prototype.push.apply(points, gridpoints[(mx - r) + ',' + my]);
+      Array.prototype.push.apply(points, gridpoints[(mx + r) + ',' + my]);
       Array.prototype.push.apply(points, gridpoints[mx + ',' + my]);
     } else if (!cy) {
       Array.prototype.push.apply(points, gridpoints[mx + ',' + my]);
