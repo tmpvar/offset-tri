@@ -16,6 +16,9 @@ var area = require('2d-polygon-area');
 var segseg = require('segseg');
 var sign = require('signum');
 
+var findCrossing = require('./find-crossing');
+var createMouse = require('./create-mouse');
+
 var TAU = Math.PI*2;
 var min = Math.min;
 var max = Math.max;
@@ -50,7 +53,11 @@ var polyline = [
 // var polyline = [[-10,-100],[-100,-100]]//,[-112,162],[-148,-23],[0,0],[91,28]];
 // var polyline = [[-10,-100],[-19,-100]]
 // var polyline = [[-130,-93],[-19,-100]]
-var polyline = [[-10,-100],[-100,-100],[-45,25],[-146,-5]]
+var polyline = [[0,0],[10,0]]
+
+
+var mouse = createMouse(polyline);
+
 window.dump = function() {
   console.log(JSON.stringify(polyline, null, '  '))
 }
@@ -67,147 +74,6 @@ function line(ctx, x1, y1, x2, y2, color) {
     ctx.lineTo(x2, y2);
     ctx.strokeStyle = color || "grey"
     ctx.stroke();
-}
-
-function findCrossing(c, n, delta) {
-
-  /*
-      |     :
-      |     :
-      |     :
-      |     :  a
-      |  b  :
-      |     c
-
-      |_____|
-         r
-
-      c - r == 0
-      b - r == -
-      a - r == +
-  */
-
-  var d0 = c[2] - delta;
-  var d1 = n[2] - delta;
-  if (Math.abs(d0) < EPS) {
-    return c;
-  }
-
-  if (Math.abs(d1) < EPS) {
-    return n;
-  }
-
-  // ret will eventually be [x, y, sdf(x,y)]
-  var ret = [0, 0];
-
-  /*
-
-    o  d0 (6)
-     \
-      \
-       \
-        o ~~~ isosurface shell (0)
-         \
-          o d1 (-2)
-
-
-    THE ANSWER
-      length of distance interval: 8
-      length of the edge interval: 24
-      the zero crossing (0): .25 (from d1)
-      the guessed crossing on edge:
-        24 * .25 == 6
-        24 - 6 == 18
-
-    in 1d!
-
-  d0 (6)              d1 (-2)
-    o------------o----o
-    +            0    -
-
-                 |____|
-                   .25
-
-
-
-    length = Math.max(6, -2) - Math.min(6, -2) == 8
-    min(6, -2) / (6 - -2)
-
-    ratio (choose one):
-    e1) -2 / 8 == -0.25  (min)
-    e0)  6 / 8 ==  0.75  (max)
-     |
-      \
-       Numerator defines which side to apply the ratio*edge length
-
-
-  e0       e1
-    o-----o
-    0     24
-
-  convert ratio to edge distance
-  e1) 24 * -0.25 == -6
-  e0) 24 *  0.75 ==  18
-
-  apply distance
-  e1) 24 + -6  == 18
-  e0)  0 +  18 == 18
-
-  */
-  var length = Math.max(d0, d1) - Math.min(d0, d1);
-  if (!length) {
-    debugger;
-    return n;
-  }
-
-
-  /*
-    find which orientation this edge is in
-
-    c[0]  n[0]  horizontal edge
-    o-----o
-
-    or vertical edge
-
-    o c[1]
-    |
-    |
-    o n[1]
-  */
-
-  // always choose `c` for the inteval stuffs
-  var ratio = d0 / length;
-  var amt, edgeLength;
-  // vertical: both `x`s are the same
-  if (n[0] === c[0]) {
-    edgeLength = Math.max(c[1], n[1]) - Math.min(c[1], n[1]);
-    amt = edgeLength * ratio;
-    if (sign(c[1]) === sign(amt)) {
-      ret[1] = c[1] - amt;
-    } else {
-      ret[1] = c[1] + amt;
-    }
-    ret[0] = c[0];
-
-  // horizontal: both `y`s are the same
-  } else if (n[1] === c[1]) {
-    edgeLength = Math.max(c[0], n[0]) - Math.min(c[0], n[0]);
-    amt = edgeLength * ratio;
-    if (sign(c[0]) === sign(amt)) {
-      ret[0] = c[0] - amt;
-    } else {
-      ret[0] = c[0] + amt;
-    }
-    ret[1] = c[1];
-  } else {
-    throw new Error('ended up off of the grid')
-  }
-
-  if (isNaN(ret[0]) || isNaN(ret[1])) {
-    throw new Error('nan')
-  }
-
-  return ret;
 }
 
 function bisect(a, b) {
@@ -373,9 +239,12 @@ function gridfill(ctx, delta, minx, miny, maxx, maxy, results) {
           var edge;
           if (edgea[2] > 0) {
             edge = [edgea, edgeb]
+            var oedge = [edgea.slice(), edgeb.slice()]
           } else {
             edge = [edgeb, edgea]
+            var oedge = [edgeb.slice(), edgea.slice()]
           }
+
 
 
           // bisect the quad edge to find the closest point to zero-crossing
@@ -465,29 +334,18 @@ function gridfill(ctx, delta, minx, miny, maxx, maxy, results) {
             // contour.push([mid, x, y, midpointDistance]);
             // contour.push([[edge[0][0], edge[0][1]], x, y, edge[2]]);
             // contour.push([[edge[1][0], edge[1][1]], x, y, edge[2]]);
-            // ctx.beginPath();
-            //   ctx.moveTo(oedge[0][0], oedge[0][1]);
-            //   ctx.lineTo(oedge[1][0], oedge[1][1]);
-            //   ctx.strokeStyle = "red";
-            //   ctx.stroke();
+            ctx.beginPath();
+              ctx.moveTo(oedge[0][0], oedge[0][1]);
+              ctx.lineTo(oedge[1][0], oedge[1][1]);
+              ctx.strokeStyle = "red";
+              ctx.stroke();
 
             // ctx.beginPath()
             //   circle(ctx, mid[0], mid[1], 5);
             //   ctx.stroke();
 
-            // ctx.fillStyle = "rgba(255, 255, 54, .1)";
-            // ctx.fillRect(x+5, y+5, r-10, r-10);
-          } else {
-
-
-            var nx = x;
-            var ny = y;
-
-            var ni = (i+2)%4;
-            var currentCacheKey = [i, x, y].join(':');
-            var oppositeCacheKey =
-
-            cache[currentCacheKey] = contour[contour.length-1];
+            ctx.fillStyle = "rgba(255, 255, 54, .1)";
+            ctx.fillRect(x+5, y+5, r-10, r-10);
           }
         }
       })
@@ -501,29 +359,25 @@ function gridfill(ctx, delta, minx, miny, maxx, maxy, results) {
   contour.forEach(function(point) {
     var x = point[0][0];
     var y = point[0][1];
-    var mx = x - (x%r);
-    var my = y - (y%r);
+    var cx = x%delta;
+    var cy = y%delta;
+    var mx = x - cx;
+    var my = y - cy;
 
-    var gridkey = mx + ',' + my;
+    var gridkey = [mx + ',' + my];
+
     if (!gridpoints[gridkey]) {
       gridpoints[gridkey] = [];
     }
+
     var local = gridpoints[gridkey];
-    var found = false;
-    for (var i = 0; i<local.length; i++) {
-      var lp = local[i][0];
-      if (vecNear(lp, point[0])) {
+    for (var i=0; i<local.length; i++) {
+      if (vecNear(local[i][0], point[0])) {
         return;
       }
     }
 
     gridpoints[gridkey].push(point);
-
-    var p = point[0];
-    var key = p[0] + ',' + p[1];
-    if (!points[key]) {
-      points[key] = 1;
-    }
   });
 
   console.log(gridpoints)
@@ -569,9 +423,10 @@ function gridfill(ctx, delta, minx, miny, maxx, maxy, results) {
 
     list = list.next(node(a))
   */
-
+  var nodeId = 0
   function node(crossing) {
     return {
+      id: nodeId++,
       crossing: crossing[0],
       distance: crossing[3],
       next: null,
@@ -584,35 +439,53 @@ function gridfill(ctx, delta, minx, miny, maxx, maxy, results) {
   }
 
   function doit(r, linkedListNode) {
-
     var crossing = linkedListNode.crossing;
-    var crossings = findCellCrossings(r, crossing);
+    seenPoint[crossing.join(',')] = true;
 
-    var found = crossings.filter(function(c) {
-      if (!vecNear(c[0], crossing[0])) {
-        var midpoint = bisect(crossing[0], c[0]);
-        var midpointDistance = sdf(midpoint) - r;
+    var sentinal = 10;
+    var dx = 0;
+    var dy = 0;
+    var ctmp = [crossing[0], crossing[1]]
+    while(sentinal--) {
+      ctmp[0] = crossing[0] + dx;
+      ctmp[1] = crossing[1] + dy;
 
-        return sign(midpointDistance) === sign(crossing[3]);
+      var crossings = findCellCrossings(r, ctmp);
+
+  console.log('crossings', crossings.length, crossings)
+
+      var found;
+      if (crossings.length === 1) {
+        if (vecNear(crossings[0], ctmp)) {
+          found = [crossings[1]];
+        } else {
+          found = [crossings[0]];
+        }
+      } else {
+        found = crossings.filter(function(c) {
+          var midpoint = bisect(crossing, c[0]);
+          var midpointDistance = sdf(midpoint) - delta;
+          return sign(midpointDistance) === sign(linkedListNode.distance);
+        });
       }
-      return false;
-    });
+      if (found.length > 0) {
+        var newNode = node(found[0]);
+        linkedListNode.append(newNode);
+        return newNode
+      } else {
+        dx+=r;
 
-    if (found.length > 1) {
-      throw new Error('more than one possibility');
-    } else {
-
-      var newNode = node(found[0]);
-      linkedListNode.append(newNode);
-      return newNode
+      }
     }
   }
 
 
   var seenCells = {};
+  var seenPoint = {};
+
   function findCellCrossings(r, crossing) {
-    var x = crossing[0][0];
-    var y = crossing[0][1];
+    var x = crossing[0];
+    var y = crossing[1];
     var mx = x - (x%r);
     var my = y - (y%r);
     var cx = x % r;
@@ -670,23 +543,39 @@ function gridfill(ctx, delta, minx, miny, maxx, maxy, results) {
       Array.prototype.push.apply(points, gridpoints[(mx - r) + ',' + my]);
       Array.prototype.push.apply(points, gridpoints[(mx - r) + ',' + (my -r)]);
       Array.prototype.push.apply(points, gridpoints[mx + ',' + (my - r)]);
+      Array.prototype.push.apply(points, gridpoints[(mx + r) + ',' + my]);
+      Array.prototype.push.apply(points, gridpoints[(mx + r) + ',' + (my  + r)]);
+      Array.prototype.push.apply(points, gridpoints[mx + ',' + (my + r)]);
     } else if (!cx) {
       Array.prototype.push.apply(points, gridpoints[(mx - r) + ',' + my]);
       Array.prototype.push.apply(points, gridpoints[(mx + r) + ',' + my]);
       Array.prototype.push.apply(points, gridpoints[mx + ',' + my]);
     } else if (!cy) {
       Array.prototype.push.apply(points, gridpoints[mx + ',' + my]);
+      Array.prototype.push.apply(points, gridpoints[mx + ',' + (my + r)]);
       Array.prototype.push.apply(points, gridpoints[mx + ',' + (my - r)]);
     }
 
-    return points;
+    return points.filter(function(c) {
+      var seenKey = c[0].join(',')
+      return !vecNear(c[0], crossing) && !seenPoint[seenKey];
+    });
   }
 
-  var randomCrossing = gridpoints[Object.keys(gridpoints)[0]][0];
+  // var randomCrossing = gridpoints[Object.keys(gridpoints)[0]][0];
 
-  var list = node(randomCrossing);
+  // var list = node(randomCrossing);
+  // var head = list;
+  // var times = contour.length-2;
+  // while(times--) {
+  //   ctx.beginPath()
+  //     circle(ctx, list.crossing[0], list.crossing[1], 5);
+  //     ctx.strokeStyle = "green"
+  //     ctx.stroke();
+  //   list = doit(delta, list);
+  //   console.log('node #'+list.id, list.crossing.join(', '));
 
-  console.log('DOIT', doit(delta, list));
+  // }
 
 
   // Object.keys(gridpoints).map(function(key) {
@@ -751,22 +640,22 @@ function gridfill(ctx, delta, minx, miny, maxx, maxy, results) {
   // });
 
 
-  Object.keys(gridpoints).map(function(key) {
-    var pair = gridpoints[key];
-    if (pair.length < 2) {
-      console.log('bail')
-      return;
-    }
+  // Object.keys(gridpoints).map(function(key) {
+  //   var pair = gridpoints[key];
+  //   if (pair.length < 2) {
+  //     console.log('bail')
+  //     return;
+  //   }
 
-    ctx.beginPath()
-    ctx.moveTo(pair[0][0][0], pair[0][0][1]);
-    pair.forEach(function(p, i) {
-      ctx.lineTo(p[0][0], p[0][1]);
-    });
+  //   ctx.beginPath()
+  //   ctx.moveTo(pair[0][0][0], pair[0][0][1]);
+  //   pair.forEach(function(p, i) {
+  //     ctx.lineTo(p[0][0], p[0][1]);
+  //   });
 
-    ctx.strokeStyle = '#4F8323';
-    ctx.stroke();
-  })
+  //   ctx.strokeStyle = 'orange';
+  //   ctx.stroke();
+  // })
 
 
   // TODO: join end to end these contours
@@ -859,63 +748,4 @@ var ctx = window.ctx = fc(function() {
     line(ctx, seg[0][0], seg[0][1], seg[1][0], seg[1][1], 'red');
 
   });
-});
-
-var mouse = {
-  down: false,
-  dragging: false,
-  near: false,
-  pos: [0, 0]
-};
-
-function nearPolyline(mouse, polyline) {
-  var m = mouse.pos;
-  for (var i=0; i<polyline.length; i++) {
-    var p = polyline[i];
-    var dx = p[0]-m[0];
-    var dy = p[1]-m[1];
-    var d = Math.sqrt(dx*dx + dy*dy);
-
-    if (d < min(10, r)) {
-      return p;
-    }
-  }
-  return false;
-}
-
-document.addEventListener('mousemove', function(ev) {
-  mouse.pos[0] = ev.clientX - (ctx.canvas.width/2)|0;
-  mouse.pos[1] = ev.clientY - (ctx.canvas.height/2)|0;
-
-  if (mouse.down !== false) {
-    if (!mouse.dragging) {
-      mouse.dragging = true;
-    } else {
-      var p = mouse.down;
-      p[0] = mouse.pos[0];
-      p[1] = mouse.pos[1];
-    }
-  } else {
-    var lastNear = mouse.near;
-    mouse.near = nearPolyline(mouse, polyline);
-    if (mouse.near && mouse.near !== lastNear) {
-      console.log(mouse.near.join(', '))
-    }
-  }
-  ctx.dirty();
-});
-
-document.addEventListener('copy', function(e) {
-  e.clipboardData.setData('text/plain', JSON.stringify(polyline));
-  e.preventDefault();
-});
-
-document.addEventListener('mouseup', function(ev) {
-  mouse.down = false;
-  mouse.dragging = false;
-  ctx.dirty();
-});
-
-document.addEventListener('mousedown', function(ev) {
-  mouse.down = nearPolyline(mouse, polyline);
 });

@@ -13,5 +13,8 @@
     "sdf-polygon-2d": "^1.1.0",
     "segseg": "^0.2.1",
     "signum": "^1.0.0"
+  },
+  "devDependencies": {
+    "tape": "^4.0.0"
   }
 }
